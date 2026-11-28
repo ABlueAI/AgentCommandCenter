@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const {
   AGENT_GIT_ENV_KEYS, AGENT_NOREPLY_EMAIL, isAgentToken, normalizeAgentToken, isAgentPane, buildAgentGitEnv,
 } = require('./agent-git-env');
@@ -53,6 +54,7 @@ const FINE = 'github_pat_' + '11ABCDEFG0123456789abc_' + 'x'.repeat(59);
     ['a stray hyphen', TOKEN.slice(0, 20) + '-' + TOKEN.slice(21), /^character 21 \(U\+002D\) can't be in a GitHub token/],
     ['a smart quote', '\u201C' + TOKEN, /^character 1 \(U\+201C\)/],
     ['a short classic token', TOKEN.slice(0, 30), /classic token \(ghp_\) is 40 characters; this one is 30/],
+    ['an underscore in a classic token body', TOKEN.slice(0, 20) + '_' + TOKEN.slice(21), /character 21 \(U\+005F\).*classic token/],
     ['a short fine-grained token', 'github_pat_abc', /fine-grained token \(github_pat_\) is 33 to 266 characters; this one is 14/],
     ['another kind of GitHub token', 'gho_' + TOKEN.slice(4), /does not start with ghp_ or github_pat_/],
   ];
@@ -148,6 +150,27 @@ const AMBIENT = {
     assert(!/return \{[^}]*:\s*agentGitToken\s*[,}]/.test(body) && !/return\s+agentGitToken\b/.test(body),
       `${ch}: never returns the token`);
   }
+  // Run the registered handler with a stub vault and the real normalizer.
+  const start = src.indexOf("ipcMain.handle('set-agent-token'");
+  const handler = src.slice(start, src.indexOf('\n});', start) + '\n});'.length);
+  let save;
+  let encrypted;
+  let normalized;
+  vm.runInNewContext(handler, {
+    ipcMain: { handle: (_channel, fn) => { save = fn; } },
+    launcherGate: { assess: () => ({ ok: true }) },
+    normalizeAgentToken: (input) => { normalized = input; return normalizeAgentToken(input); },
+    isAgentToken,
+    safeStorage: {
+      isEncryptionAvailable: () => true,
+      encryptString: (token) => { encrypted = token; return Buffer.from('ciphertext'); },
+    },
+    loadSecure: () => ({}), saveSecure: () => {}, agentGitToken: null, tlog: () => {},
+  });
+  const pasted = '\u200B' + TOKEN + '\r\n';
+  const saved = save({}, pasted);
+  assert(normalized === pasted && saved.ok && encrypted === TOKEN,
+    'set-agent-token uses normalizeAgentToken before encrypting a paste');
   assert(!/tlog\([^)]*agentGitToken\b(?!\s*\?)/.test(src), 'the token is never logged');
   const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
   assert(!/getAgentToken\b|readAgentToken/.test(preload), 'preload has no way to read the token back');

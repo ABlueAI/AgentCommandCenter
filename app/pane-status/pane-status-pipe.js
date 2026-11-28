@@ -41,7 +41,7 @@ function buildPipeName(uniqueSuffix) {
  *   registry     -> pane-status-registry instance
  *   pipeName     -> full pipe path from buildPipeName()
  *   onStateChange(view) -> called ONLY after a message is accepted AND changed something
- *   log(line)    -> bounded logger. Never receives a token or a message body.
+ *   log(line, kind?) -> bounded logger. Never receives a token or a message body.
  *   now()        -> injected clock, for latency accounting
  *
  * THIS MODULE PERFORMS NO PROCESS CREATION AND NO PROCESS CONTROL. It has no child_process import and
@@ -73,7 +73,7 @@ function createPaneStatusPipe(deps) {
     counters.connections += 1;
     if (live >= MAX_CONCURRENT_CONNECTIONS) {
       counters.dropped += 1;
-      log('[pane-status] connection dropped: concurrency bound reached');
+      log('[pane-status] connection dropped: concurrency bound reached', 'error');
       try { socket.destroy(); } catch { /* already gone */ }
       return;
     }

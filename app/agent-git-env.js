@@ -88,12 +88,14 @@ function normalizeAgentToken(raw) {
   const removed = raw.length - token.length;
   if (!token) return { ok: false, reason: 'no token was entered' };
   if (isAgentToken(token)) return { ok: true, token, removed };
+  const classic = token.startsWith('ghp_');
   const chars = Array.from(token);
-  const badAt = chars.findIndex((c) => !TOKEN_CHAR_RE.test(c));
+  const badAt = chars.findIndex((c, i) => !TOKEN_CHAR_RE.test(c) || (classic && i >= 4 && c === '_'));
   if (badAt !== -1) {
-    return { ok: false, reason: `character ${badAt + 1} (${codePoint(chars[badAt])}) can't be in a GitHub token; copy the token again` };
+    const kind = chars[badAt] === '_' ? 'a classic token (ghp_)' : 'a GitHub token';
+    return { ok: false, reason: `character ${badAt + 1} (${codePoint(chars[badAt])}) can't be in ${kind}; copy the token again` };
   }
-  if (token.startsWith('ghp_')) {
+  if (classic) {
     return { ok: false, reason: `a classic token (ghp_) is 40 characters; this one is ${token.length}` };
   }
   if (token.startsWith('github_pat_')) {

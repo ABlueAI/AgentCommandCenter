@@ -104,7 +104,7 @@ const { isAgentToken, isAgentPane, normalizeAgentToken } = require('./agent-git-
 const { createProcessTreeKiller } = require('./process-tree');
 const processTree = createProcessTreeKiller({
   platform: process.platform, env: process.env, execFile, execFileSync,
-  log: (line) => tlog(line),
+  log: tlog,
 });
 const { createAdmissionBudget, REASON: ADMISSION_REASON } = require('./admission-budget');
 const { createAdmissionLedgerStore } = require('./admission-budget-store');
@@ -775,7 +775,7 @@ app.whenReady().then(() => {
       // entry by construction.
       env: process.env,
       commandName: AGENT_CMD.claude,
-      log: (line) => tlog(line),
+      log: tlog,
     }).discover(),
     // Dependency B. PID plus PROCESS START TIME, because a recycled PID is otherwise indistinguishable
     // from the original lock owner. Anything it cannot determine becomes a conservative refusal.
@@ -813,7 +813,7 @@ app.whenReady().then(() => {
       return delivered; // Keep renderer-delivery accounting independent of OS toast delivery.
     },
     publishSetupState: paneStatusPublishers.publishSetupState,
-    log: (line) => tlog(line),
+    log: tlog,
   });
 
   // The four zero-argument invokes. Each runs the canonical trusted-sender gate BEFORE any filesystem
@@ -1111,12 +1111,12 @@ function sendMainLog(line, kind) {
   if (win && !win.isDestroyed()) win.webContents.send(channelFor(line, kind), line);
 }
 
-function tlog(msg) {
+function tlog(msg, kind = 'routine') {
   if (_t0 === null) _t0 = Date.now();
   const elapsed = Date.now() - _t0;
   const line = `[TIMING +${elapsed}ms] ${msg}`;
   console.log(line);
-  sendMainLog(line, 'routine');
+  sendMainLog(line, kind);
 }
 // Call at the start of each createAgent attempt to reset the clock.
 function tlogReset() { _t0 = Date.now(); tlog('--- new createAgent sequence ---'); }
