@@ -29,6 +29,7 @@
 // Output is a single JSON document on stdout; `dockview-app-integration.test.js` consumes it.
 
 const { app, BrowserWindow, ipcMain, session } = require('electron');
+const { once } = require('node:events');
 const path = require('path');
 
 // THE WINDOWS ARE SHOWN, and these switches keep them un-throttled behind other windows.
@@ -379,7 +380,8 @@ async function openWindow(options) {
 
   progress(`${o.name}: loading index.html`);
   await withTimeout(win.loadFile(INDEX_FILE), STEP_TIMEOUT_MS, `${o.name}: loadFile`);
-  await withTimeout(win.webContents.executeJavaScript(PRELUDE, true), STEP_TIMEOUT_MS, `${o.name}: prelude`);
+  // The IPC fixture starts with no live panes for each scenario, just like a new app process.
+  await withTimeout(win.webContents.executeJavaScript('sessionStorage.clear();\n' + PRELUDE, true), STEP_TIMEOUT_MS, `${o.name}: prelude`);
   control.releaseSettings();          // boot() may now proceed past `await cc.getSettings()`
   progress(`${o.name}: booted`);
   return win;
@@ -399,6 +401,26 @@ async function closeWindow(win) {
 
 function run(win, source) {
   return withTimeout(win.webContents.executeJavaScript(source, true), STEP_TIMEOUT_MS, 'page step');
+}
+
+async function scenarioRendererReload() {
+  const win = await openWindow({ name: 'renderer-reload' });
+  const before = await run(win, AWAIT_SETTLED);
+  await run(win, CLICK_NEW_SHELL);
+
+  // Reload the document in the same BrowserWindow. Keep main's recorded starts and window storage.
+  armSettingsGate();
+  const loaded = once(win.webContents, 'did-finish-load');
+  win.webContents.reload();
+  await withTimeout(loaded, STEP_TIMEOUT_MS, 'renderer reload');
+  await run(win, PRELUDE);
+  control.releaseSettings();
+  const after = await run(win, AWAIT_SETTLED);
+  await run(win, CLICK_NEW_SHELL);
+
+  const result = { before, after, ptyStart: ipc.ptyStart.slice(), ptyKill: ipc.ptyKill.slice() };
+  await closeWindow(win);
+  return result;
 }
 
 /**
@@ -1421,6 +1443,7 @@ app.whenReady().then(async () => {
     ['exactSet', scenarioExactSet],
     ['malformedAndConcurrency', scenarioMalformedAndConcurrency],
     ['saveRefused', scenarioSaveRefused],
+    ['rendererReload', scenarioRendererReload],
   ];
 
   // A global watchdog: a harness that hangs must still produce a report naming the step it hung on,

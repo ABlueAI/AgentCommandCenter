@@ -94,6 +94,7 @@ function projectView(view) {
  *   controller       -> pane-status-controller instance
  *   confirmNatively(question) -> Promise<boolean>. A REAL native dialog in production; injected so
  *                       tests can assert the refusal path without drawing a window.
+ *   clearStaleLockRefusal  Main-owned reason when this instance cannot clear stale locks.
  *   log(line)
  */
 function registerPaneStatusIpc(deps) {
@@ -162,6 +163,10 @@ function registerPaneStatusIpc(deps) {
     const g = guard(CHANNELS.CLEAR_STALE_LOCK, event);
     if (!g.ok) return g;
 
+    if (d.clearStaleLockRefusal) {
+      log(`[pane-status] REFUSED ${CHANNELS.CLEAR_STALE_LOCK}: ${d.clearStaleLockRefusal}`);
+      return { ok: false, reason: d.clearStaleLockRefusal, setup: projectSetupState(controller.getSetupState()) };
+    }
     if (!confirmNatively) return { ok: false, reason: IPC_REFUSAL.UNAVAILABLE };
     let confirmed = false;
     try { confirmed = (await confirmNatively()) === true; } catch { confirmed = false; }

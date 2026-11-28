@@ -251,12 +251,13 @@ const settle = () => new Promise((r) => setImmediate(r));
       `an OS browser that ${label}: reported once, naming the link, after the forwarded line`);
   }
   {
-    // A known side effect, recorded on purpose: the policy refuses %80 to %9F escapes, which also
-    // occur in ordinary percent-encoded UTF-8 (here an en dash). Such links stay in the app now.
     const { g, opened, lines } = makeGuards();
-    g.onWindowOpen({ url: 'https://en.wikipedia.org/wiki/1990%E2%80%93present' });
+    const url = 'https://example.com/1990%E2%80%93present';
+    const result = g.onWindowOpen({ url });
     await settle();
-    assert(opened.length === 0 && lines[0].includes('url-encoded-control'), 'a UTF-8 link with a %80-%9F byte is refused by the policy (a known policy low, docs/1.1-GAP-AUDIT.md)');
+    assert(result.action === 'deny' && opened.length === 1 && opened[0] === url,
+      'an ordinary UTF-8 link opens in the OS browser while the popup is still denied');
+    assert(lines.length === 1 && lines[0].includes('forwarded to external browser'), 'the popup forwarding is logged');
   }
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);

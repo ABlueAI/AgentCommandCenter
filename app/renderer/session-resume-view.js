@@ -34,7 +34,10 @@
     const host = d.host;
     const roleLabel = typeof d.roleLabel === 'function' ? d.roleLabel : (r) => r;
     const onResume = d.onResume, onFresh = d.onFresh, onDismiss = d.onDismiss;
+    const onLaunchError = d.onLaunchError;
     let rows = [];
+    const pending = new Set();
+    const failed = new Set();
 
     function node(tag, className, text) {
       const n = doc.createElement(tag);
@@ -49,7 +52,26 @@
       b.onclick = handler;
       return b;
     }
-    function drop(row) { rows = rows.filter((r) => r !== row); draw(); }
+    function drop(row) {
+      failed.delete(row);
+      rows = rows.filter((r) => r !== row);
+      draw();
+    }
+
+    async function launch(row, action) {
+      if (pending.has(row) || !rows.includes(row)) return;
+      pending.add(row);
+      failed.delete(row);
+      draw();
+      let started = false;
+      try { started = (await action(row)) === true; }
+      catch (err) { if (onLaunchError) onLaunchError(err); }
+      finally {
+        pending.delete(row);
+        if (started) drop(row);
+        else { failed.add(row); draw(); }
+      }
+    }
 
     function draw() {
       host.textContent = '';
@@ -59,10 +81,16 @@
       const head = node('div', 'resume-head');
       const n = rows.length;
       head.appendChild(node('span', null, `${n === 1 ? 'One Claude pane was' : n + ' Claude panes were'} open when Mako last closed. Resume each conversation, or start fresh.`));
-      head.appendChild(button('Not now', 'mini ghost', 'Don\'t offer these again', () => {
-        const all = rows; rows = []; draw();
+      const dismissAll = button('Not now', 'mini ghost', 'Don\'t offer these again', () => {
+        if (pending.size) return;
+        const all = rows;
+        rows = [];
+        failed.clear();
+        draw();
         for (const r of all) onDismiss(r);
-      }));
+      });
+      dismissAll.disabled = pending.size > 0;
+      head.appendChild(dismissAll);
       box.appendChild(head);
       for (const row of rows) {
         const t = describeRow(row, roleLabel);
@@ -75,12 +103,12 @@
         if (row.worktreeMissing) {
           line.appendChild(button('Dismiss', 'mini ghost', 'Don\'t offer this again', () => { drop(row); onDismiss(row); }));
         } else {
-          line.appendChild(button('Resume', 'mini accent', 'Open this pane again with claude --resume', () => {
-            if (onResume(row) !== false) drop(row);
-          }));
-          line.appendChild(button('Start fresh', 'mini ghost', 'Open the same pane with a new conversation', () => {
-            if (onFresh(row) !== false) drop(row);
-          }));
+          const resume = button('Resume', 'mini accent', 'Open this pane again with claude --resume', () => launch(row, onResume));
+          const fresh = button('Start fresh', 'mini ghost', 'Open the same pane with a new conversation', () => launch(row, onFresh));
+          resume.disabled = fresh.disabled = pending.has(row);
+          line.appendChild(resume);
+          line.appendChild(fresh);
+          if (failed.has(row)) line.appendChild(node('span', 'resume-warn small', 'Could not start the pane. See Logs.'));
         }
         box.appendChild(line);
       }

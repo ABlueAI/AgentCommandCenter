@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { saveResultMessage } = require('./agent-token-view');
+const { saveResultMessage, createStatusCheck } = require('./agent-token-view');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -39,5 +39,40 @@ assert(/<span id="agentTokenStatus"[^>]*role="status"/.test(html), 'the banner h
 assert(html.indexOf('<script src="agent-token-view.js"></script>') !== -1
   && html.indexOf('agent-token-view.js') < html.indexOf('<script src="app.js"></script>'), 'the view loads before app.js');
 
-process.stdout.write(`\nagent-token-view: ${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+(async () => {
+  assert(typeof createStatusCheck === 'function', 'the status check handles delayed boot replies');
+  if (createStatusCheck) {
+    const statuses = [];
+    const logs = [];
+    const check = createStatusCheck((result) => statuses.push(result), (line) => logs.push(line));
+    await check.read(async () => ({ ok: false, error: 'untrusted-sender' }));
+    assert(statuses[0]?.ok === false && logs[0]?.includes('untrusted-sender'), 'a refused status read shows the banner and logs its reason');
+    await check.read(async () => { throw new Error('fixture'); });
+    assert(statuses[1] === null && logs[1]?.includes('status check failed'), 'a rejected status read shows the banner and logs failure');
+    let respond;
+    const pending = check.read(() => new Promise((resolve) => { respond = resolve; }));
+    const changed = { ok: true, hasToken: false };
+    check.update(changed);
+    respond({ ok: true, hasToken: true });
+    await pending;
+    assert(statuses.length === 3 && statuses[2] === changed, 'a late boot response cannot overwrite an interactive change');
+    // A stored token main refused at start-up reaches the Logs tab through the status reply: main's
+    // own start-up log line goes out before the window exists, so it would never be seen.
+    for (const issue of ['invalid-shape', 'unreadable']) {
+      const lines = [];
+      const seen = [];
+      const boot = createStatusCheck((result) => seen.push(result), (line) => lines.push(line));
+      await boot.read(async () => ({ ok: true, hasToken: false, available: true, loadIssue: issue }));
+      assert(seen.length === 1 && lines.length === 1 && lines[0].includes(issue) && /save it again/i.test(lines[0]),
+        `a stored token refused at start-up (${issue}) is logged with its reason and what to do`);
+    }
+    {
+      const lines = [];
+      const boot = createStatusCheck(() => {}, (line) => lines.push(line));
+      await boot.read(async () => ({ ok: true, hasToken: true, available: true, loadIssue: null }));
+      assert(lines.length === 0, 'a healthy status logs nothing');
+    }
+  }
+  process.stdout.write(`\nagent-token-view: ${passed} passed, ${failed} failed\n`);
+  process.exitCode = failed ? 1 : 0;
+})().catch((err) => { console.error(err); process.exitCode = 1; });

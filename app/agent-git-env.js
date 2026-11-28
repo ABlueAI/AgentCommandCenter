@@ -34,7 +34,7 @@ const AGENT_LOGIN = 'ABlueAgent';
 const AGENT_NOREPLY_EMAIL = '344505663+ABlueAgent@users.noreply.github.com';
 const GH_HELPER = '!gh auth git-credential';
 
-// Classic GitHub token shapes: ghp_ (classic PAT) or github_pat_ (fine-grained). The value is only
+// GitHub token shapes: ghp_ (classic PAT) or github_pat_ (fine-grained). The value is only
 // shape-checked so a pasted label or whitespace is refused; it is never logged.
 const TOKEN_RE = /^(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,255})$/;
 

@@ -55,7 +55,10 @@ function makeElectronStub(userDataDir, record) {
       whenReady: () => Promise.resolve(),
       getPath: (name) => (name === 'userData' ? userDataDir : os.tmpdir()),
       setAppUserModelId() {},
-      on() {}, quit() {},
+      on(ch, fn) {
+        if (!record.appEvents.has(ch)) record.appEvents.set(ch, []);
+        record.appEvents.get(ch).push(fn);
+      }, quit() {},
       requestSingleInstanceLock() { throw new Error('main.js must not request the single-instance lock'); },
     },
     BrowserWindow,
@@ -110,13 +113,21 @@ for (const r of ['web-scout', 'operator', 'source-scout', 'builder']) {
 const SANDBOX = fs.mkdtempSync(path.join(OUTPUTS, 'web-scout-fixture-'));
 
 const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], exitHandlers: [], mainErrors: [], webContents: null };
+record.appEvents = new Map();
+record.ptyKills = [];
+record.treeKills = [];
+let finishTreeKill;
 const ptyStub = {
   spawn(file, args, opts) {
     record.ptySpawns += 1;
     record.spawnArgs.push({ file, args, cwd: opts && opts.cwd, env: opts && opts.env });
     // onExit handlers are kept so the S08 section can simulate a process exit without pty-kill (which
     // would run a real tree kill on the stub's pid).
-    return new Proxy({ onData() {}, onExit(cb) { record.exitHandlers.push(cb); }, write() {}, resize() {}, kill() {}, pid: 1234 },
+    const pid = 1000 + record.ptySpawns;
+    return new Proxy({
+      onData() {}, onExit(cb) { record.exitHandlers.push(cb); }, write() {}, resize() {},
+      kill() { record.ptyKills.push(pid); }, pid,
+    },
       { get(t, k) { return k in t ? t[k] : () => {}; } });
   },
 };
@@ -193,6 +204,14 @@ for (const k of Object.keys(process.env)) {
 Module._load = function (request) {
   if (request === 'electron') return makeElectronStub(USER_DATA, record);
   if (request === '@lydell/node-pty') return ptyStub;
+  if (request === './process-tree') {
+    return {
+      createProcessTreeKiller: () => ({
+        killTree: (_pid, done) => { finishTreeKill = done; },
+        killTreesSync: (pids) => { record.treeKills.push(pids); },
+      }),
+    };
+  }
   if (request === 'child_process') return cpWrapped;
   return realLoad.apply(this, arguments);
 };
@@ -566,16 +585,22 @@ Module._load = function (request) {
   section('S10 — the authority level picks a main-owned permission mode; Maximum never spawns a Claude pane');
   {
     const lastCmd = () => record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
+    const sessionSuffix = ' --session-id [0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$';
     for (const [level, mode] of [['minimum', 'plan'], ['medium', 'acceptEdits'], ['high', 'auto']]) {
+      const toolArgs = " --allowedTools '[^']+'" + (level === 'minimum' ? " --disallowedTools 'Edit,Write,NotebookEdit'" : '');
       let before = record.ptySpawns;
       await ptyStart(goodEvent, { id: 'pane-auth-b-' + level, role: 'builder', cli: 'claude', cwd: FIX, authority: level });
       assert(record.ptySpawns === before + 1, `builder at ${level} spawns`);
       assert(lastCmd().indexOf('claude --agent builder --allowedTools ') !== -1 && lastCmd().indexOf('--permission-mode ' + mode) !== -1,
         `and launches with its explicit tool set and --permission-mode ${mode}`);
+      assert(new RegExp('claude --agent builder' + toolArgs + ' --permission-mode ' + mode + sessionSuffix).test(lastCmd()),
+        'builder mode ' + mode + ' precedes the final session ID');
       before = record.ptySpawns;
       await ptyStart(goodEvent, { id: 'pane-auth-c-' + level, role: null, cli: 'claude', cwd: FIX, authority: level });
       assert(record.ptySpawns === before + 1 && / claude --allowedTools '/.test(' ' + lastCmd()) && lastCmd().indexOf('--permission-mode ' + mode) !== -1,
         `a bare claude pane at ${level} launches with --permission-mode ${mode}`);
+      assert(new RegExp('claude' + toolArgs + ' --permission-mode ' + mode + sessionSuffix).test(lastCmd()),
+        'bare Claude mode ' + mode + ' precedes the final session ID');
     }
     {
       const before = record.ptySpawns;
@@ -584,7 +609,8 @@ Module._load = function (request) {
         initialPrompt: 'Review the change set in ./x.diff',
       });
       assert(record.ptySpawns === before + 1
-        && /claude --agent reviewer --allowedTools '[^']+' --disallowedTools 'Edit,Write,NotebookEdit' --permission-mode plan "Review the change set in \.\/x\.diff"/.test(lastCmd()),
+        && new RegExp(String.raw`claude --agent reviewer --allowedTools '[^']+' --disallowedTools 'Edit,Write,NotebookEdit' --permission-mode plan "Review the change set in \./x\.diff"`
+          + sessionSuffix).test(lastCmd()),
       'the tool lists and the mode sit before the reviewer\'s opening prompt, the mode last');
     }
     {
@@ -1048,6 +1074,35 @@ Module._load = function (request) {
       assert(r3.status === 2 && r3.stderr === REFUSAL,
         'mode disabled + no tool_name: continues to the unchanged path check (outside path refused)');
     }
+  }
+
+  section('S06 — shutdown includes a pane whose asynchronous tree kill is pending');
+  {
+    const id = 'pane-pending-shutdown';
+    const started = await ptyStart(goodEvent, { id, cli: 'claude', cwd: FIX });
+    const pid = 1000 + record.ptySpawns;
+    assert(started.ok, 'the pending-close test pane started');
+    record.on.get('pty-kill')(goodEvent, id);
+    assert(typeof finishTreeKill === 'function' && !record.ptyKills.includes(pid), 'pane close starts the tree kill first');
+    const finishFirst = finishTreeKill;
+    // A second pane is closed and its process exits before quit: its PID may already belong to
+    // another process (Windows reuses PIDs), so shutdown must not target it.
+    const exitedId = 'pane-exited-before-shutdown';
+    const exitedStarted = await ptyStart(goodEvent, { id: exitedId, cli: 'claude', cwd: FIX });
+    const exitedPid = 1000 + record.ptySpawns;
+    assert(exitedStarted.ok, 'the exited-before-quit test pane started');
+    record.on.get('pty-kill')(goodEvent, exitedId);
+    const finishExited = finishTreeKill;
+    record.exitHandlers[record.exitHandlers.length - 1]({ exitCode: 0 });
+    for (const listener of record.appEvents.get('before-quit')) listener();
+    assert(record.treeKills.length === 1 && record.treeKills[0].includes(pid),
+      'shutdown includes the PID removed from the live pane map');
+    assert(!record.treeKills[0].includes(exitedPid), 'shutdown never targets the PID of a pane whose process already exited');
+    assert(record.ptyKills.filter((killed) => killed === pid).length === 1, 'shutdown closes the pending PTY');
+    assert(!record.ptyKills.includes(exitedPid), 'shutdown does not close the PTY of a pane that already exited');
+    finishFirst();
+    finishExited();
+    assert(record.ptyKills.filter((killed) => killed === pid).length === 1, 'a late async callback cannot kill the PTY twice');
   }
 
   process.env.USERPROFILE = envBefore.USERPROFILE;

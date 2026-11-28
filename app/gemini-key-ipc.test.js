@@ -448,7 +448,7 @@ withSecureStore(({ file, startup, logs, dialogs, getKey, getToken, flushNotices 
     (clear.match(/updateKeyBanner/g) || []).length === 1,
     'renderer: Clear shows "no key" only after main says ok, and logs a refusal');
   const tokenClear = app.match(/\$\('#agentTokenClear'\)\.onclick = async \(\) => \{[\s\S]*?\n  \};/)[0];
-  assert(/if \(r && r\.ok\) updateAgentTokenBanner/.test(tokenClear) &&
+  assert(/if \(r && r\.ok\) agentTokenStatusCheck\.update\(\{ ok: true, hasToken: false \}\)/.test(tokenClear) &&
     /else appendLog\(.*clear failed: .*r\.error/.test(tokenClear),
     'renderer: token Clear displays the refusal and keeps the stored banner');
   // Startup credential notices go out on main-error as soon as the page has loaded, so boot() must

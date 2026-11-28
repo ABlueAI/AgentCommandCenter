@@ -395,8 +395,11 @@ const REGIONS = [
     // Page-reader navigation adds the argument pinned above. Comments describe its environment
     // scope and the separate responsibilities of the launcher's cwd check and the tool hook.
     // Previous pin: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
-    utf16Length: 18721,
-    sha: '3376aed51170cb667c3030155985b52c949d3af3e9d6fc88396270cde0677121',
+    // Re-pinned for #164 after merging main (page-reader pin 18721 / 3376aed5...). PTY exit removes
+    // its handle from pending tree cleanup, so shutdown never targets a PID that has already exited.
+    // Previous pin: 18721 / 3376aed51170cb667c3030155985b52c949d3af3e9d6fc88396270cde0677121
+    utf16Length: 18753,
+    sha: '57a73db9d29b90cdfb00e31c1a8ce0e8e7761cdc0a99cf876a5cb8c774e2a8d0',
   },
 ];
 

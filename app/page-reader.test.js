@@ -161,7 +161,9 @@ section('2. MCP config and CLI arguments');
   }
   assert(pr.MCP_TOOLS.every((t) => a.deny.indexOf(t) === -1), 'the two allowed tools are not denied');
   const readme = path.join(__dirname, 'node_modules', '@playwright', 'mcp', 'README.md');
-  if (fs.existsSync(readme)) {
+  const hasReadme = fs.existsSync(readme);
+  assert(hasReadme, '@playwright/mcp README is required for the deny-list check (run npm ci in app)');
+  if (hasReadme) {
     const documented = Array.from(new Set((fs.readFileSync(readme, 'utf8').match(/^- \*\*browser_[a-z_]+\*\*/gm) || [])
       .map((l) => 'mcp__playwright__' + l.slice(4, -2)))).sort();
     const expected = documented.filter((t) => pr.MCP_TOOLS.indexOf(t) === -1);

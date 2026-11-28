@@ -123,6 +123,12 @@ async function testTerminalLinks() {
   assert(opened[0] === 'http://example.com/', 'the URL handed to the OS is the parsed href, not the raw string');
 }
 
+{
+  const { ipc, opened } = makeIpc();
+  const url = 'https://example.com/%E2%80%93';
+  assert(ipc.handleOpenExternal({}, url).ok && opened[0] === url, 'a UTF-8 encoded en dash opens from the terminal');
+}
+
 const SECRET = 'SECRETTOKEN';
 for (const [label, url] of [
   ['file: URL', `file:///C:/Windows/${SECRET}.exe`],

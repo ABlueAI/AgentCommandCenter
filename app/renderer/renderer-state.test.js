@@ -107,6 +107,7 @@ function setup(overrides = {}) {
   };
   const window = {
     addEventListener: noop,
+    ccAgentTokenView: require('./agent-token-view'),
     ccAudioModuleHealth: require('./audio-module-health'),
     ccAuthorityChoice: require('./authority-choice'),
     ccClipboardConsumer: require('./clipboard-consumer'),
@@ -138,8 +139,14 @@ function setup(overrides = {}) {
     ...overrides,
   };
   const addon = class {};
+  // The pane-ID sequence lives in session storage so a renderer reload never reuses an ID (#331).
+  const session = new Map();
+  const sessionStorage = {
+    getItem: (key) => (session.has(key) ? session.get(key) : null),
+    setItem: (key, value) => { session.set(key, String(value)); },
+  };
   const context = vm.createContext({
-    window, document, cc, Terminal, PtyParser: require('./pty-parser').PtyParser,
+    window, document, cc, Terminal, sessionStorage, PtyParser: require('./pty-parser').PtyParser,
     agentDom: require('./agent-dom'),
     videoModelPolicy: require('./video-model-policy'),
     FitAddon: { FitAddon: class { fit() {} } },

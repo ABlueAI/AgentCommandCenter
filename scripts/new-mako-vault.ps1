@@ -8,8 +8,8 @@
   Never overwrites: an existing index, AGENTS.md or CLAUDE.md is left as it is and reported. Refuses a path
   inside this repository (it is public, and the vault is private by design; docs/PLAN-1.1.md S13).
   Writes no credentials and reads none. The links point at GitHub, so the vault holds no copy of
-  the repository's files. The inside-the-repo check compares paths as text; it doesn't resolve
-  junctions, symlinks or subst drives.
+  the repository's files. The guard refuses paths that pass through junctions or symlinks.
+  It does not resolve subst drives.
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\new-mako-vault.ps1 -Path D:\Workspace\Mako-Vault
 #>
@@ -25,7 +25,26 @@ $script:MvClaudeName = 'CLAUDE.md'
 
 function Get-MakoVaultFullPath {
     param([string]$LiteralPath)
-    return [System.IO.Path]::GetFullPath($LiteralPath).TrimEnd('\', '/')
+    $full = [System.IO.Path]::GetFullPath($LiteralPath)
+    $root = [System.IO.Path]::GetPathRoot($full)
+    if ($full.Length -le $root.Length) { return $full }
+    return $full.TrimEnd('\', '/')
+}
+
+function Assert-MakoVaultPlainPath {
+    param([string]$FullPath)
+    $root = [System.IO.Path]::GetPathRoot($FullPath)
+    $parts = $FullPath.Substring($root.Length).Split([char[]]@('\', '/'), [StringSplitOptions]::RemoveEmptyEntries)
+    $current = $root
+    foreach ($part in @('') + $parts) {
+        if ($part) { $current = [System.IO.Path]::Combine($current, $part) }
+        try { $attributes = [System.IO.File]::GetAttributes($current) }
+        catch [System.IO.FileNotFoundException] { return }
+        catch [System.IO.DirectoryNotFoundException] { return }
+        if ($attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+            throw "Refusing '$FullPath': '$current' is a reparse point. Use a direct path."
+        }
+    }
 }
 
 function Test-MakoVaultInsideRepo {
@@ -34,8 +53,10 @@ function Test-MakoVaultInsideRepo {
     $r = Get-MakoVaultFullPath $RepoRoot
     if ([string]::Equals($v, $r, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
     foreach ($sep in @('\', '/')) {
-        if ($v.StartsWith($r + $sep, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
+        if ($v.StartsWith($r.TrimEnd('\', '/') + $sep, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
     }
+    Assert-MakoVaultPlainPath $r
+    Assert-MakoVaultPlainPath $v
     return $false
 }
 
@@ -71,7 +92,7 @@ function Get-MakoVaultAgentsText {
   key setup or Bitwarden.
 - Keep "Mako index.md" current: when you add a note, add a link to it under "Notes", newest first.
   Don't remove Blue's notes or links.
-- The project's rules are the repository's AGENTS.md; this file only adds the vault's rules.
+- Read the [repository rulebook]($script:MvRepoUrl/AGENTS.md). This file adds the vault's rules.
 - Use the Obsidian Skills (kepano/obsidian-skills) for Obsidian Markdown, Bases and Canvas files.
 
 "@
