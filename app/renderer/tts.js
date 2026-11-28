@@ -2,8 +2,8 @@
 //
 // Runs the 82M Kokoro TTS model entirely in the renderer on the GPU via WebGPU
 // (fp32, with a q8 WASM/CPU fallback). The selected model files download once from
-// Hugging Face and are cached by Chromium. The ONNX runtime itself is vendored
-// locally (vendor/ort/), so only the model is fetched over the network.
+// Hugging Face and are cached by Chromium. The ONNX Runtime JavaScript ships in
+// vendor/kokoro.web.js, and its WASM binaries are fetched from jsDelivr.
 //
 // This is an ES module; it exposes a small API on window.ccTTS for the classic
 // app.js to call. Nothing here speaks automatically — the UI drives it.
