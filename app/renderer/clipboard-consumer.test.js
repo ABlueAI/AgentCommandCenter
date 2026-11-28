@@ -233,7 +233,8 @@ function harness(opts) {
     const block = appSrc.slice(start, end);
     assert(start > 0 && block.includes('clip.writeText(result.text).then('), 'Copy Output awaits the async clipboard write before deciding success');
     assert(block.indexOf('flashCopyBtn(true)') > block.indexOf('.then('), 'the success flash is INSIDE the resolved .then (never before the IPC resolves)');
-    assert(block.includes('.catch(() => {})'), 'the Copy Output write has a trailing .catch (no unhandled rejection)');
+    assert(block.includes(".catch(() => clipboardFailed('clipboardWrite: IPC failed'))"),
+      'the Copy Output write reports rejection through the visible failure handler');
     assert(!/cc\.clipboardWrite\(/.test(block), 'Copy Output no longer calls cc.clipboardWrite directly — it routes through the consumer');
     // The terminal shortcut paths are async with .catch.
     assert(/handlePasteKey\(e, pasteFromClipboard\)/.test(appSrc), 'Ctrl+V retains the double-paste guard');
