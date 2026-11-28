@@ -270,7 +270,7 @@ function harness(opts) {
       'Gemini panes turn off bracketed paste through the paste policy');
     assert(/if \(!terms\.has\(id\) \|\| term\.options\.disableStdin\) return false;\s*term\.paste\(text\);/.test(appSrc),
       'paste refuses a closed or input-disabled pane before reaching xterm');
-    const startFailed = /const onStartFailed = \(reason\) => \{[\s\S]*?\n  \};/.exec(appSrc);
+    const startFailed = /const onStartFailed = \(reason, cancel\) => \{[\s\S]*?\n  \};/.exec(appSrc);
     assert(Boolean(startFailed) && startFailed[0].includes('term.options.disableStdin = true;'),
       'a failed start disables the pane\'s input');
     const ptyExit = /cc\.onPtyExit\(\(\{ id \}\) => \{[\s\S]*?\n  \}\);/.exec(appSrc);

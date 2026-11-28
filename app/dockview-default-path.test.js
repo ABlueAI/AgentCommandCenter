@@ -495,7 +495,7 @@ process.stdout.write('\nthe terminal launch transaction docks BEFORE it starts a
   const openBody = appCode.slice(openStart, openEnd);
 
   const dockAt = openBody.indexOf("layoutInstance.addPane(id, 'terminal')");
-  const startAt = openBody.indexOf('cc.ptyStart({');
+  const startAt = openBody.indexOf('cc.ptyStart(id, {');
   assert(dockAt > -1 && startAt > -1, 'both the dock attempt and the PTY start are present');
   assert(dockAt < startAt,
     'THE ORDERING: adoption is attempted BEFORE ptyStart, so a failed dock cannot race a spawning PTY');
@@ -503,7 +503,7 @@ process.stdout.write('\nthe terminal launch transaction docks BEFORE it starts a
   assert((appCode.match(/cc\.ptyStart\(/g) || []).length === 1,
     'ptyStart appears exactly once in app.js — there is no second terminal implementation');
   assert((appCode.match(/cc\.ptyKill\(/g) || []).length === 1,
-    'ptyKill appears exactly once — one kill path, in the single close path');
+    'ptyKill appears exactly once in the shared cancellation path');
 
   // The pre-PTY rollback must invoke NEITHER. Bounded to its own function body.
   const rbStart = openBody.indexOf('const rollbackLocalPane = () => {');
@@ -524,7 +524,7 @@ process.stdout.write('\nthe terminal launch transaction docks BEFORE it starts a
     'NEGATIVE CONTROL: the dock-failure path no longer calls the full close path (which would ptyKill)');
 
   // A refused or rejected start must converge on the ONE close path, and only when docked.
-  assert(/const onStartFailed = \(reason\) => \{[\s\S]{0,600}if \(layoutInstance\) closeThisPane\(\);/.test(openBody),
+  assert(/const onStartFailed = \(reason, cancel\) => \{[\s\S]{0,600}if \(layoutInstance\) closeThisPane\(\);/.test(openBody),
     'a failed start removes the pane and its panel — and only when a panel exists to remove');
   assert(/Promise\.resolve\(startResult\)\.then\(/.test(openBody),
     'the ptyStart result is always consumed, so a rejection cannot go unhandled');
@@ -689,10 +689,11 @@ process.stdout.write('\nthe audio seam is GONE, not disabled\n');
 process.stdout.write('\nterminal IDs stay monotonic and are never reused\n');
 // ---------------------------------------------------------------------------
 {
-  assert(/let termSeq = 0;/.test(appCode), 'the terminal sequence starts at zero');
-  assert(/'pty' \+ \(\+\+termSeq\)/.test(appCode), 'every terminal takes the NEXT sequence value');
-  assert((appCode.match(/termSeq\s*=\s*0/g) || []).length === 1,
-    'termSeq is initialised exactly once and never reset — "Terminal 17" means 17 created, not 17 live');
+  assert(/let nextPaneId = 0;/.test(mainSrc), 'the main-process terminal sequence starts at zero');
+  assert(/'pty' \+ \(\+\+nextPaneId\)/.test(mainSrc) && /reservation = await cc\.ptyReserve\(\)/.test(appCode),
+    'every terminal takes the next sequence value from main');
+  assert((mainSrc.match(/nextPaneId\s*=\s*0/g) || []).length === 1,
+    'the terminal sequence is initialized once in main and survives a renderer reload');
   assert(/liveTerminalCount: \(\) => terms\.size/.test(appCode),
     'a separate live counter exists so a monotonic label cannot be mistaken for a live count');
 }

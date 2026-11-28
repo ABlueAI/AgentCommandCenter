@@ -741,6 +741,11 @@ async function openInAppTerminal(opts = {}) {
   const chatBody = pane.querySelector('.chat-body');
   const paneData = { term, fit, pane, ro, roConnected: true, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
   let ptyRequested = false;
+  const cancelPty = () => {
+    if (!ptyRequested) return;
+    ptyRequested = false;
+    cc.ptyKill(id);
+  };
   // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
   // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
   // line-buffered and ANSI-stripped, so chunk boundaries can't split the marker. The pane's other
@@ -787,7 +792,7 @@ async function openInAppTerminal(opts = {}) {
       if (window.ccSTT && window.ccSTT.cancelVideoTranscription) window.ccSTT.cancelVideoTranscription(id);
       cc.claudeVideoScoutCancel(id);
     }
-    else if (ptyRequested) cc.ptyKill(id);
+    else cancelPty();
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
@@ -861,7 +866,7 @@ async function openInAppTerminal(opts = {}) {
   // panel to strand and main already surfaces its own refusal through `main-error`.
   const onStartFailed = (reason, cancel) => {
     if (!terms.has(id)) return;             // the user closed it first — nothing to undo
-    if (cancel) cc.ptyKill(id);
+    if (cancel) cancelPty();
     ptyRequested = false;
     term.options.disableStdin = true;
     appendLog(`[pty] start FAILED for ${id}: ${reason}`

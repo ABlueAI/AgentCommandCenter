@@ -1426,6 +1426,7 @@ const pageReaderGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrusted
 // The folder of the last page-reader this main process prepared. MAIN-OWNED: the renderer never names a
 // folder for the report hand-off below.
 let lastPageReaderDir = null;
+const preparedReviewerDirs = new Set();
 ipcMain.handle('page-reader-prepare', async (e, req) => {
   const sender = pageReaderGate.assess(e);
   if (!sender.ok) return { ok: false, error: sender.reason };
@@ -1495,13 +1496,16 @@ ipcMain.handle('page-report-to-reviewer', async (e) => {
   }
   const sandbox = await createOutputSandbox('page-report');
   if (!sandbox || !sandbox.ok) return { ok: false, error: 'page-report-sandbox-failed' };
+  let dir;
   try {
-    fs.writeFileSync(path.join(sandbox.dir, pageReaderMod.REPORT_FILE), text, { encoding: 'utf8', flag: 'wx' });
+    dir = fs.realpathSync.native(sandbox.dir);
+    fs.writeFileSync(path.join(dir, pageReaderMod.REPORT_FILE), text, { encoding: 'utf8', flag: 'wx' });
   } catch (err) {
     return { ok: false, error: 'page-report-copy-failed' };
   }
+  preparedReviewerDirs.add(dir);
   tlog('page-report-to-reviewer: report copied');
-  return { ok: true, dir: sandbox.dir, initialPrompt: pageReaderMod.REVIEWER_PROMPT };
+  return { ok: true, dir, initialPrompt: pageReaderMod.REVIEWER_PROMPT };
 });
 
 // FAIL-CLOSED fence check. The path-fence that confines web-scout/operator lives in the
@@ -1848,8 +1852,7 @@ function sessionMemoryCall(fn) {
 }
 // paneId -> the main-minted session ID of the Claude pane running in it.
 const paneSessions = new Map();
-// `expected`, when given, is the session the caller started: a pane id the renderer reused (after a
-// reload) then maps to a newer session, which an old pane's exit must not close.
+// `expected`, when given, is the session owned by the exiting process.
 function stopPaneSession(id, reason, expected) {
   const sid = paneSessions.get(id);
   if (!sid || (expected !== undefined && sid !== expected)) return;
@@ -1978,8 +1981,10 @@ function resolvePtyWorkingDirectory(cwd, launch) {
     // Page-report handoff creates a separate main-owned sandbox for Reviewer.
     const outputs = fs.realpathSync.native(path.join(loadSettings().projectsRoot, '.command-center', 'outputs'));
     const report = fs.realpathSync.native(cwd);
-    const relative = path.relative(outputs, report);
-    if (/^page-report-\d{4}(?:-\d{2}){2}T\d{2}(?:-\d{2}){2}-[a-zA-Z0-9]{6}$/.test(relative)) {
+    if (!sameResumeFolder(path.dirname(report), outputs) || !path.basename(report).startsWith('page-report-')) return permitted;
+    if (preparedReviewerDirs.has(report)) return { ok: true, dir: report };
+    const history = sessionMemoryCall(() => sessionMemory().list());
+    if (history.ok && history.records.some((r) => r.role === 'reviewer' && sameResumeFolder(r.worktree, report))) {
       return { ok: true, dir: report };
     }
     return permitted;
@@ -2253,6 +2258,7 @@ ipcMain.handle('pty-start', (e, opts, id) => {
         sessionId: claudeSessionId, paneId: id, role: launch.role, cli: 'claude', worktree: cwd,
       }));
     if (resumeSessionId) tlog(`pty-start: resumed a recorded Claude session (record ${rec.ok ? 'reopened' : 'not reopened'})`);
+    if (rec.ok) preparedReviewerDirs.delete(cwd);
     // A resumed session is running even if its record couldn't be reopened, so it stays in
     // paneSessions and a second Resume of it is refused as already running.
     if (rec.ok || resumeSessionId) paneSessions.set(id, claudeSessionId);

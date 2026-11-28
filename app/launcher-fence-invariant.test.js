@@ -399,8 +399,8 @@ const REGIONS = [
     // Previous pin: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
     // #262, #263 and #268 add cwd authorization, main-issued pane IDs, and input checks.
     // Previous pin: 18721 / 3376aed51170cb667c3030155985b52c949d3af3e9d6fc88396270cde0677121
-    utf16Length: 18189,
-    sha: '3a7ca1d81e96af612e08f53d6a5c31f7688cf198a2f7205321cba137f2378a9b',
+    utf16Length: 18239,
+    sha: 'f9c0afb3aba2d2df09a9f87aa605dbe8e5147244b2575c049ad94386807b409a',
   },
 ];
 
