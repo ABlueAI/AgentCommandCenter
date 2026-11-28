@@ -16,6 +16,7 @@
   <nav id="makoRail" class="mk-rail"></nav>
   <!-- S66: the quiet-hours and Pause all banners, shown in both layouts and on every tab. -->
   <div id="makoBanners" class="mk-banners"></div>
+  <div id="preferenceSaveErrors" class="key-banner hidden" role="alert"></div>
   <!-- Top bar: brand + active repo selector + global refresh -->
   <header class="topbar">
     <div class="brand" role="img" aria-label="Mako">
@@ -279,8 +280,9 @@
   <div id="modal" class="modal-backdrop hidden">
     <div class="modal">
       <h3>New Agent</h3>
-      <label id="taskNameLabel">Task name <span class="muted">(kebab-case)</span></label>
-      <input id="taskName" placeholder="e.g. search-bar" />
+      <label id="taskNameLabel" for="taskName">Task name <span class="muted">(kebab-case)</span></label>
+      <input id="taskName" placeholder="e.g. search-bar" aria-describedby="videoUrlError" />
+      <p id="videoUrlError" class="range-error hidden" role="alert"></p>
       <label>Role</label>
       <div class="agent-choices role-choices">
         <button class="choice active" data-role="builder">🔨 Builder</button>
