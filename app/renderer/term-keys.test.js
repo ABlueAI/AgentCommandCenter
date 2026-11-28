@@ -60,5 +60,32 @@ assert(keys.resolveKey(null, 'claude').handled === false, 'a missing event is ig
   assert(keys.handlePasteKey(null, () => { throw new Error('no'); }) === false, 'a missing event is ignored');
 }
 
+{
+  const fs = require('fs');
+  const path = require('path');
+  const vm = require('vm');
+  const app = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  // From the paste helper the handler calls (main's `pasteFromClipboard`, #334) to the handler's end,
+  // so the test runs the real paste path through `clip.pasteIntoPty`.
+  const start = app.indexOf('const pasteFromClipboard');
+  const end = app.indexOf('\n  });', app.indexOf('term.attachCustomKeyEventHandler(', start));
+  assert(start !== -1 && end !== -1, 'app.js has the paste helper and the terminal key handler');
+  const handler = app.slice(start, end + '\n  });'.length);
+  let onKey;
+  let pastes = 0;
+  let prevented = 0;
+  let pasteEvent;
+  vm.runInNewContext(handler, {
+    term: { attachCustomKeyEventHandler: (fn) => { onKey = fn; } },
+    paneCli: 'claude',
+    window: { ccTermKeys: { ...keys, handlePasteKey: (e, paste) => { pasteEvent = e; return keys.handlePasteKey(e, paste); } } },
+    clip: { pasteIntoPty: async () => { pastes++; } },
+    clipboardFailed: () => { throw new Error('clipboard failed'); },
+  });
+  const event = { type: 'keydown', code: 'KeyV', ctrlKey: true, preventDefault: () => { prevented++; } };
+  assert(onKey(event) === false && pasteEvent === event && pastes === 1 && prevented === 1,
+    'the renderer terminal key handler uses handlePasteKey and consumes Ctrl+V after one paste');
+}
+
 process.stdout.write(`\nterm-keys: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

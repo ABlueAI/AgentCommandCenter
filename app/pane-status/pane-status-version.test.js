@@ -6,6 +6,7 @@
 // later release of the floor's major version is SUPPORTED but not VERIFIED.
 
 const versionMod = require('./pane-status-version');
+const { CHANNEL, channelFor } = require('../main-log-level');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -97,10 +98,16 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
     assert(gate.supported() === true && gate.verified() === true && gate.reason() === null, 'and the gate opens');
   }
   {
-    const gate = versionMod.createVersionGate({ resolveVersion: async () => ({ ok: true, raw: '9.9.8' }), supportedVersions: ['9.9.9'] });
+    const logs = [];
+    const gate = versionMod.createVersionGate({
+      resolveVersion: async () => ({ ok: true, raw: '9.9.8' }), supportedVersions: ['9.9.9'],
+      log: (line, kind = 'routine') => logs.push({ line, channel: channelFor(line, kind) }),
+    });
     await gate.probe();
     assert(gate.supported() === false && gate.reason() === versionMod.VERSION_REFUSAL.UNSUPPORTED,
       'an UNLISTED version leaves the gate closed with version-unsupported');
+    assert(logs.some(({ line, channel }) => line.includes('NOT supported') && channel === CHANNEL.ERROR),
+      'the unsupported Claude version is shown as a failure');
   }
   {
     const gate = versionMod.createVersionGate({ resolveVersion: async () => ({ ok: true, raw: 'garbage' }), supportedVersions: ['9.9.9'] });

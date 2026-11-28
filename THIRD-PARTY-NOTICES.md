@@ -141,12 +141,38 @@ named file in its zip, byte for byte (`InterVariable.woff2` sha256 `693b77d4…2
 Font Name in Cascadia Code's licence doesn't apply (it restricts modified versions). The licence
 texts in `LICENSES/` are each project's own licence file at that tag.
 
+## File checksums
+
+SHA-256 pins the vendored files and linked licence texts checked into the repository.
+The test treats CRLF as LF for JavaScript, CSS and plain text; it hashes binary files byte for byte.
+
+| File | SHA-256 |
+|---|---|
+| `app/renderer/vendor/addon-fit.js` | `ba3ea256ce0620a0992a197d6c9baea64823fc93d8da07a9e366ca9943c18527` |
+| `app/renderer/vendor/addon-unicode11.js` | `72353b5178e1a7382716df1cfedf8ab070eea655d38995bb9f4f284fe56e2f2b` |
+| `app/renderer/vendor/addon-web-links.js` | `b74864125ef3889753b94e61eb4dabb99b2a27f920f0c9a7bd53cbe6d10f032a` |
+| `app/renderer/vendor/addon-webgl.js` | `b85f8d4b3e9756bebb757e3fe47134d70f03ea3d6b187624426d2e2b65dec06c` |
+| `app/renderer/vendor/fonts/CascadiaCode.woff2` | `3ec1f7e7250c055d35504a1500e8a9ba12b26f25214a86da6537e28abc60dccc` |
+| `app/renderer/vendor/fonts/InterVariable.woff2` | `693b77d4f32ee9b8bfc995589b5fad5e99adf2832738661f5402f9978429a8e3` |
+| `app/renderer/vendor/kokoro.web.js` | `6067712fe4c43cdb36c762f860a5ab8d96ea1d9c8882466438eb9f3d0d20be8f` |
+| `app/renderer/vendor/xterm.css` | `854a7c0fb70e8b1a083c16797ab827299fb18744f5ad34f227b48337e33293c6` |
+| `app/renderer/vendor/xterm.js` | `14903579ff54664cd72f8e8699e6961a6272c21863ec1c3b118cdc8af5d4a972` |
+| `LICENSES/Apache-2.0.txt` | `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
+| `LICENSES/GPL-3.0.txt` | `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986` |
+| `LICENSES/MIT-ECC.txt` | `326146379f01bb137c0a5d3c54770c1aa31076705c8b88a7f6b26a460f6221b2` |
+| `LICENSES/MIT-kokoro-bundle.txt` | `01fa396390f296fc111c9c6d4e88b0719d6fe0cbeaa3bb1dc276d49feba9e64e` |
+| `LICENSES/MIT-xterm.js.txt` | `647680a4785240f888d42260bf7b7b6c121fca920712ca84d5d80e698d806e7a` |
+| `LICENSES/OFL-1.1-CascadiaCode.txt` | `82c05d6c53dfa0c9025985c19e371810020b74ed2c61d51d370f2a8ab2506d52` |
+| `LICENSES/OFL-1.1-Inter.txt` | `262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a` |
+
 ## Keeping this file current
 
 Anyone who adds, replaces or updates a file under `app/renderer/vendor/` updates its row here, and
-adds any new licence text to `LICENSES/`. The test `app/third-party-notices.test.js` (run by
+adds any new licence text to `LICENSES/`. Update the checksums above after verifying changed files
+and licence texts against upstream. The test `app/third-party-notices.test.js` (run by
 `npm test` in `app/`) checks that every tracked file under `app/renderer/vendor/` has a row, that
-every row names a tracked file, and that every licence file linked here exists. Since S57 it also
+every row names a tracked file, every licence cell is filled, and the vendored files and linked
+licence texts match their recorded checksums. Since S57 it also
 fails if an npm package in `app/package-lock.json` or a row in this file's file tables carries a
 licence that isn't on the permissive list in `app/licence-policy.js` and isn't one of that file's
 named exceptions, and if the npm table above doesn't list exactly those exceptions with the

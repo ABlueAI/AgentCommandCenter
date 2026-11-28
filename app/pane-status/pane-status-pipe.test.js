@@ -7,9 +7,11 @@
 
 const crypto = require('crypto');
 const net = require('net');
+const { EventEmitter } = require('events');
 const pipeMod = require('./pane-status-pipe');
 const registryMod = require('./pane-status-registry');
 const protocol = require('./pane-status-protocol');
+const { CHANNEL, channelFor } = require('../main-log-level');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -85,6 +87,32 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 250));
     listening.emit('error', Object.assign(new Error('fixture listener failure'), { code: 'EIO' }));
     assert(!ready.isListening() && fatal.join() === 'EIO', 'a listener failure after readiness notifies its owner');
     ready.stop();
+  }
+
+  // Drive the concurrency bound with inert sockets so this check is independent of OS scheduling.
+  {
+    const server = new EventEmitter();
+    server.listen = () => server.emit('listening');
+    server.close = () => {};
+    let connect;
+    const logs = [];
+    const pipe = pipeMod.createPaneStatusPipe({
+      net: { createServer: (handler) => { connect = handler; return server; } },
+      registry: {},
+      pipeName: pipeMod.buildPipeName('abcdef01'),
+      log: (line, kind = 'routine') => logs.push({ line, channel: channelFor(line, kind) }),
+    });
+    await pipe.start();
+    for (let i = 0; i < pipeMod.MAX_CONCURRENT_CONNECTIONS; i++) {
+      const socket = new EventEmitter();
+      socket.setTimeout = () => {};
+      connect(socket);
+    }
+    let dropped = false;
+    connect({ destroy: () => { dropped = true; } });
+    assert(dropped && logs.some(({ line, channel }) => line.includes('connection dropped') && channel === CHANNEL.ERROR),
+      'a connection dropped at the concurrency limit is shown as a failure');
+    pipe.stop();
   }
 
   // ---------------------------------------------------------------- happy path

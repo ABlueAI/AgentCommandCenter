@@ -7,7 +7,7 @@
 // keeps the notice complete from now on:
 //   1. every file git tracks under app/renderer/vendor/ has a row in the notices table;
 //   2. every row in that table names a file git tracks (no stale rows);
-//   3. every LICENSES/ file the notices link to exists;
+//   3. every tracked vendor file and linked LICENSES/ text matches its recorded SHA-256;
 //   4. README.md points to the notices;
 //   5 to 7 (S57, the licence guardrail, rules in app/licence-policy.js): every npm package in
 //   app/package-lock.json and every file row in the notices carries only permissive licences or
@@ -18,6 +18,8 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { createHash } = require('crypto');
+const policy = require('./licence-policy');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -30,14 +32,15 @@ const repoRoot = path.join(__dirname, '..');
 const read = (...parts) => fs.readFileSync(path.join(repoRoot, ...parts), 'utf8').replace(/\r\n/g, '\n');
 const VENDOR = 'app/renderer/vendor/';
 
-// The two parsers; the self-checks at the end run them on a small sample too.
-function rowPaths(notices) {
-  // A row is a markdown table line whose first cell is a backticked path under app/renderer/vendor/.
-  const re = /^\|\s*`(app\/renderer\/vendor\/[^`]+)`\s*\|/gm;
-  return [...notices.matchAll(re)].map((m) => m[1]);
-}
 function licenceLinks(notices) {
   return [...new Set([...notices.matchAll(/\]\((LICENSES\/[^)#\s]+)\)/g)].map((m) => m[1]))];
+}
+
+function sha256(file) {
+  const bytes = fs.readFileSync(path.join(repoRoot, file));
+  // latin1 preserves the bytes of text files while allowing CRLF to be normalized on Windows.
+  const content = /\.(?:css|js|txt)$/.test(file) ? bytes.toString('latin1').replace(/\r\n/g, '\n') : bytes;
+  return createHash('sha256').update(content, 'latin1').digest('hex');
 }
 
 let tracked = null;
@@ -48,11 +51,11 @@ try {
   assert(false, 'git ls-files ran (needed to list tracked vendor files): ' + e.message);
 }
 
-let notices = '';
-try { notices = read('THIRD-PARTY-NOTICES.md'); } catch (e) { /* asserted below */ }
-assert(notices.length > 0, 'THIRD-PARTY-NOTICES.md exists at the repo root');
+const notices = read('THIRD-PARTY-NOTICES.md');
+assert(notices.trim().length > 0, 'THIRD-PARTY-NOTICES.md has content');
 
-const rows = rowPaths(notices);
+const realRows = policy.noticeFileRows(notices);
+const rows = realRows.filter(({ file }) => file && file.startsWith(VENDOR)).map(({ file }) => file);
 
 if (tracked) {
   // Floor guard: a broken git call or pathspec must not pass by finding nothing.
@@ -68,8 +71,19 @@ assert(new Set(rows).size === rows.length, 'no file has two rows in THIRD-PARTY-
 
 const links = licenceLinks(notices);
 assert(links.length >= 3, `the notices link to licence texts under LICENSES/ (found ${links.length})`);
-for (const l of links) {
-  assert(fs.existsSync(path.join(repoRoot, ...l.split('/'))), `${l} exists`);
+const pins = new Map();
+const checksumRows = /^\|\s*`((?:app\/renderer\/vendor\/|LICENSES\/)[^`]+)`\s*\|\s*`([a-f0-9]{64})`\s*\|\s*$/gm;
+for (const [, file, digest] of notices.matchAll(checksumRows)) {
+  assert(!pins.has(file), `${file} has only one SHA-256 in THIRD-PARTY-NOTICES.md`);
+  pins.set(file, digest);
+}
+const checkedFiles = new Set([...(tracked || []), ...links]);
+for (const file of checkedFiles) {
+  assert(pins.has(file), `${file} has a SHA-256 in THIRD-PARTY-NOTICES.md`);
+  assert(sha256(file) === pins.get(file), `${file} matches its recorded SHA-256`);
+}
+for (const file of pins.keys()) {
+  assert(checkedFiles.has(file), `${file} has a notice for its recorded SHA-256`);
 }
 
 // The GPL component must stay named as such on its row, not only in prose further down.
@@ -77,14 +91,14 @@ const kokoroRow = (notices.split('\n').find((line) => line.startsWith('| `app/re
 assert(/GPL-3\.0-or-later/.test(kokoroRow) && /eSpeak NG/.test(kokoroRow),
   'the kokoro.web.js row names eSpeak NG and GPL-3.0-or-later');
 
-let readme = '';
-try { readme = read('README.md'); } catch (e) { /* asserted below */ }
+const readme = read('README.md');
 assert(readme.includes('](THIRD-PARTY-NOTICES.md)'), 'README.md links to THIRD-PARTY-NOTICES.md');
 
-// Self-checks on the parser, so a regex change can't silently match nothing.
-const sample = '| File | x |\n|---|---|\n| `app/renderer/vendor/a.js` | [t](LICENSES/MIT.txt) |\n'
+// Self-checks on the parsers, so a regex change can't silently match nothing.
+const sample = '| File | Licence |\n|---|---|\n| `app/renderer/vendor/a.js` | [t](LICENSES/MIT.txt) |\n'
   + 'Prose `app/renderer/vendor/b.js` is not a row. [t](LICENSES/MIT.txt)\n';
-assert(JSON.stringify(rowPaths(sample)) === '["app/renderer/vendor/a.js"]', 'parser: only table rows count as rows');
+assert(JSON.stringify(policy.noticeFileRows(sample).map(({ file }) => file)) === '["app/renderer/vendor/a.js"]',
+  'parser: only table rows count as rows');
 assert(JSON.stringify(licenceLinks(sample)) === '["LICENSES/MIT.txt"]', 'parser: licence links are found once each');
 
 // --- Licence guardrail (S57, app/licence-policy.js) -------------------------------------------
@@ -92,8 +106,6 @@ assert(JSON.stringify(licenceLinks(sample)) === '["LICENSES/MIT.txt"]', 'parser:
 //    exception (exact name and licence) that THIRD-PARTY-NOTICES.md lists;
 // 6. every row in the notices' file tables names only permissive licences, or is a named exception;
 // 7. no exception is stale.
-const policy = require('./licence-policy');
-
 // Planted samples first, so the real checks below can't pass by matching nothing.
 const spdx = (e) => policy.parseSpdx(e);
 assert(spdx('MIT').ok && spdx('MIT').permissive, 'spdx: MIT is permissive');
@@ -231,9 +243,15 @@ if (lock) {
     'the real lockfile with a planted GPL-only dependency fails on that dependency');
   assert(real.problems.length === 0, 'every npm package in app/package-lock.json has a permissive licence or a named exception');
 }
-const realRows = policy.noticeFileRows(notices);
 assert(realRows.length >= rows.length + 4,
   `the licence check read ${realRows.length} notices file rows (the vendor rows plus the 4 agent rows expected)`);
+for (const { header, rows: tableRows } of policy.noticeTables(notices)) {
+  const col = header.findIndex((cell) => /^licen[cs]e\b/i.test(cell));
+  if (col === -1) continue;
+  for (const cells of tableRows) {
+    if (!cells[col]) assert(false, `notices row ${cells[0]}: licence cell is empty`);
+  }
+}
 const rowProblems = policy.checkNoticeRows(realRows);
 for (const p of rowProblems) assert(false, p);
 assert(rowProblems.length === 0, 'every THIRD-PARTY-NOTICES.md file row has a permissive licence or a named exception');

@@ -265,7 +265,7 @@ function createVersionGate(deps) {
     lastReason = supported ? null : VERSION_REFUSAL.UNSUPPORTED;
     // The version string is bounded and non-sensitive, so it is safe to log; a payload never is.
     const verdict = !supported ? 'NOT supported' : (verified ? 'supported, verified' : 'supported, unverified');
-    log(`[pane-status] Claude version resolved: ${observed} (${verdict})`);
+    log(`[pane-status] Claude version resolved: ${observed} (${verdict})`, supported ? 'routine' : 'error');
     return { ok: true, version: observed, supported, verified, raw: lastRaw, executable: lastExecutable };
   }
 

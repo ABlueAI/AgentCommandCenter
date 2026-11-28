@@ -8,6 +8,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const lockMod = require('./pane-status-lock');
+const { CHANNEL, channelFor } = require('../main-log-level');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -65,7 +66,8 @@ function phase2() {
 
   // ---------------------------------------------------------------- release is ownership-checked
   {
-    const lock = makeLock();
+    const logs = [];
+    const lock = makeLock({ log: (line, kind = 'routine') => logs.push({ line, channel: channelFor(line, kind) }) });
     const h = lock.acquire();
     assert(lock.release({ createdByUs: false }).ok === false, 'release refuses a handle we did not create');
     fs.writeFileSync(lock.lockPath(), 'somebody else replaced this\n');
@@ -73,6 +75,8 @@ function phase2() {
     assert(r.ok === false && r.reason === lockMod.LOCK_REFUSAL.CHANGED,
       'release refuses when the bytes changed — it is no longer our lock to delete');
     assert(fs.existsSync(lock.lockPath()), 'and the replacement is left in place');
+    assert(logs.some(({ line, channel }) => line.includes('lock changed under us') && channel === CHANNEL.ERROR),
+      'a lock replaced during ownership is shown as a failure');
   }
 
   // ---------------------------------------------------------------- identity content

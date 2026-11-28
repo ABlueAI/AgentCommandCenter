@@ -70,7 +70,7 @@ function createProcessTreeKiller(deps) {
     const finish = typeof done === 'function' ? done : () => {};
     const p = plan([pid]);
     if (p.skip) {
-      if (p.skip !== 'not-windows') log(`[process-tree] pane close: skipped (${p.skip}); pty.kill() only`);
+      if (p.skip !== 'not-windows') log(`[process-tree] pane close: skipped (${p.skip}); pty.kill() only`, 'error');
       finish();
       return;
     }
@@ -87,7 +87,7 @@ function createProcessTreeKiller(deps) {
   function killTreesSync(pids, timeoutMs) {
     const p = plan(pids);
     if (p.skip) {
-      if (p.skip !== 'not-windows' && p.skip !== 'no-valid-pid') log(`[process-tree] shutdown: skipped (${p.skip}); pty.kill() only`);
+      if (p.skip !== 'not-windows' && p.skip !== 'no-valid-pid') log(`[process-tree] shutdown: skipped (${p.skip}); pty.kill() only`, 'error');
       return;
     }
     const count = (p.args.length - 2) / 2;

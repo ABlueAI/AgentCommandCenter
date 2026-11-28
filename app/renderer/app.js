@@ -3,6 +3,37 @@
 
 const $ = (sel) => document.querySelector(sel);
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript', authority: window.ccAuthorityChoice.DEFAULT_LEVEL };
+const pendingPreferenceSaves = new Map();
+const preferenceSaveErrors = new Map();
+
+async function savePreference(key, value, label) {
+  const partial = { [key]: value };
+  pendingPreferenceSaves.set(key, partial);
+  let saved;
+  let reason = '';
+  try {
+    const result = await cc.saveSettings(partial);
+    saved = result && result.ok !== false && (result.ok === true || result[key] === value);
+    if (!saved) reason = (result && result.error) || 'save refused';
+  } catch (e) {
+    saved = false;
+    reason = (e && e.message) || String(e);
+  }
+  if (!saved) appendLog('[settings] could not save ' + key + ': ' + reason + '\n');
+  // An older reply must not overwrite the status of a newer change to the same preference.
+  if (pendingPreferenceSaves.get(key) !== partial) return;
+  pendingPreferenceSaves.delete(key);
+  if (saved) {
+    preferenceSaveErrors.delete(key);
+  } else {
+    const message = 'Could not save ' + label + '. The change may be lost when Mako restarts. Details in Logs.';
+    preferenceSaveErrors.set(key, message);
+  }
+  const banner = $('#preferenceSaveErrors');
+  banner.textContent = [...preferenceSaveErrors.values()].join(' ');
+  banner.classList.toggle('hidden', preferenceSaveErrors.size === 0);
+}
+
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 const quickLinksView = window.ccQuickLinksView.createQuickLinksView({
   document,
@@ -99,44 +130,8 @@ const ROLES = {
   'page-reader':    { label: 'Page Reader',     glyph: '📄', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true, page: true },
 };
 
-// ---- chat bubble renderer -----------------------------------------------
-function makeBubble(type, text, partial) {
-  const div = document.createElement('div');
-  div.className = `chat-bubble ${type}${partial ? ' partial' : ''}`;
-  const inner = document.createElement('span');
-  inner.className = 'bubble-text';
-  inner.textContent = text;
-  div.appendChild(inner);
-  return div;
-}
-
-function drainChatEvents(t) {
-  t.rafId = null;
-  const events = t.pendingEvents.splice(0);
-  for (const ev of events) {
-    if (ev.partial) {
-      if (!t.tailBubble) {
-        t.tailBubble = makeBubble(ev.type, ev.text, true);
-        t.chatBody.appendChild(t.tailBubble);
-      } else {
-        t.tailBubble.querySelector('.bubble-text').textContent = ev.text;
-      }
-    } else {
-      if (t.tailBubble) {
-        // Finalize the in-progress bubble with the confirmed final text.
-        t.tailBubble.querySelector('.bubble-text').textContent = ev.text;
-        t.tailBubble.classList.remove('partial');
-        t.tailBubble = null;
-      } else {
-        t.chatBody.appendChild(makeBubble(ev.type, ev.text, false));
-      }
-    }
-  }
-  t.chatBody.scrollTop = t.chatBody.scrollHeight;
-}
-
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
-const terms = new Map(); // id -> { term, fit, pane, ro, parser, chatBody, pendingEvents, rafId, tailBubble }
+const terms = new Map();
 let termSeq = 0;
 let activeTermId = null;  // last-focused pane (dictation LOCKS its target from this at record start)
 let sttDictationTargetId = null; // pane locked when recording started; transcript goes ONLY here
@@ -157,9 +152,14 @@ function applyTheme(name) {
   const sel = $('#themeSelect'); if (sel) sel.value = name;
   const t = xtermTheme();
   for (const x of terms.values()) { x.term.options.theme = t; } // re-theme live terminals
-  cc.saveSettings({ theme: name });
+}
+function changeTheme(name) {
+  applyTheme(name);
+  return savePreference('theme', state.theme, 'the theme');
 }
 function switchTab(name) {
+  const log = $('#logView');
+  if (log.clientHeight > 0) followLogTail = logsAtBottom(log);
   // Leaving the Terminals view must not strand maximize state (V1a): coming back
   // always lands on the normal grid, never on a half-forgotten maximized layout.
   if (name !== 'terminals') paneMaximizer.handleViewSwitch();
@@ -167,6 +167,7 @@ function switchTab(name) {
   if (name !== 'library') libMaximizer.handleViewSwitch();
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
   document.querySelectorAll('.tabpane').forEach((x) => x.classList.toggle('active', x.dataset.pane === name));
+  if (name === 'logs' && followLogTail) log.scrollTop = log.scrollHeight;
 }
 // RESIZE OWNERSHIP. A Dockview-hosted terminal is fitted ONLY by its guarded fit controller, which
 // checks visibility and geometry inside an animation frame and refuses zero/hidden/non-finite sizes.
@@ -233,7 +234,7 @@ document.addEventListener('keydown', (e) => {
 // innerHTML/Markdown/URL attributes. Copy Report and Maximize REUSE the V1a clipboard consumer and
 // the pane-maximize controller (no duplicate implementations).
 const LV = window.ccLibraryView;
-const libState = { entries: [], selectedHandle: null, currentReportText: '', loaded: false };
+const libState = { entries: [], selectedHandle: null, currentReportText: '', loaded: false, scanning: false, scanError: '' };
 const libClip = window.ccClipboardConsumer.createClipboardConsumer({
   invokeRead: () => cc.clipboardRead(),
   invokeWrite: (s) => cc.clipboardWrite(s),
@@ -267,7 +268,7 @@ function renderLibraryList() {
   if (filtered.length === 0) {
     listEl.appendChild(agentDom.el(document, 'div', {
       className: 'empty muted',
-      text: libState.entries.length ? 'No runs match the current filters.' : 'No Video Scout runs found yet.',
+      text: libState.scanError || (libState.entries.length ? 'No runs match the current filters.' : 'No Video Scout runs found yet.'),
     }));
   } else {
     for (const entry of filtered) {
@@ -278,39 +279,50 @@ function renderLibraryList() {
     }
   }
   const c = LV.computeCounts(libState.entries);
-  $('#libStatus').textContent =
+  $('#libStatus').textContent = libState.scanning ? 'Scanning…' : libState.scanError ||
     `${c.total} run(s) · ${c.available} with report · ${c.notPersisted} metadata-only · ${c.incomplete} incomplete · ${c.approximate} approx · ${c.unknown} unknown`;
 }
 
 async function refreshLibrary() {
-  // V3b: a refresh START bumps the reader epoch (and clears the follow-up state). If something
-  // newer (a selection or Open Report) takes the reader over while the scan runs, this refresh has
-  // become LATE: it still applies the fresh list + handles below, but it must NOT clear or replace
-  // what the newer action displayed.
+  if (libState.scanning) return;
+  // A successful scan replaces every Library handle in main. Retire Ask immediately and
+  // block the old list until the new handles arrive. Open Report uses a separate pane identity.
   const myEpoch = libFollowup.noteRefreshStart();
   libState.loaded = true;
+  libState.scanning = true;
+  libState.scanError = '';
+  $('#libList').inert = true;
+  $('#libRefresh').disabled = true;
   $('#libStatus').textContent = 'Scanning…';
-  let res;
-  try { res = await cc.libraryList(); }
-  catch (e) { appendLog(`[library] list failed: ${(e && e.message) || e}\n`); $('#libStatus').textContent = 'Scan failed.'; return; }
-  if (!res || !res.ok) {
-    appendLog(`[library] list refused: ${(res && res.error) || 'unknown error'}\n`);
-    $('#libStatus').textContent = 'Scan refused.';
-    return;
-  }
-  libState.entries = Array.isArray(res.entries) ? res.entries : [];
-  if (libFollowup.isCurrent(myEpoch)) {
-    libState.selectedHandle = null;
-    clearReader();
-  }
-  renderLibraryList();
-  // Honest, metadata-only reporting of what the scan found (no report/manifest content).
-  appendLog(`[library] scanned root: total=${res.total} valid=${libState.entries.length} invalid=${res.invalidCount} capExceeded=${res.capExceeded === true}\n`);
-  if (res.capExceeded) appendLog('[library] NOTE: run-directory cap reached; some runs are not listed.\n');
-  if (res.invalidCount > 0) {
-    const byReason = {};
-    for (const iv of (res.invalid || [])) byReason[iv.reason] = (byReason[iv.reason] || 0) + 1;
-    appendLog(`[library] ${res.invalidCount} invalid record(s) excluded: ${Object.entries(byReason).map(([k, v]) => `${k}x${v}`).join(', ')}\n`);
+  try {
+    const res = await cc.libraryList();
+    if (!res || !res.ok || !Array.isArray(res.entries)) {
+      appendLog(`[library] list refused: ${res?.error || 'invalid response'}\n`);
+      libState.scanError = 'Scan refused.';
+    } else {
+      libState.entries = res.entries;
+      // Metadata only. The scan results can include excluded or unlisted runs.
+      appendLog(`[library] scanned root: total=${res.total} valid=${libState.entries.length} invalid=${res.invalidCount} capExceeded=${res.capExceeded === true}\n`);
+      if (res.capExceeded) appendLog('[library] NOTE: run-directory cap reached; some runs are not listed.\n');
+      if (res.invalidCount > 0) {
+        const byReason = {};
+        for (const iv of res.invalid) byReason[iv.reason] = (byReason[iv.reason] || 0) + 1;
+        appendLog(`[library] ${res.invalidCount} invalid record(s) excluded: ${Object.entries(byReason).map(([k, v]) => `${k}x${v}`).join(', ')}\n`);
+      }
+    }
+  } catch (e) {
+    appendLog(`[library] list failed: ${(e && e.message) || e}\n`);
+    libState.scanError = 'Scan failed.';
+  } finally {
+    if (libState.scanError) libState.entries = [];
+    if (libFollowup.isCurrent(myEpoch)) {
+      libState.selectedHandle = null;
+      clearReader();
+    }
+    libState.scanning = false;
+    $('#libList').inert = false;
+    $('#libRefresh').disabled = false;
+    renderLibraryList();
   }
 }
 
@@ -339,6 +351,7 @@ function renderMeta(entryLike) {
 }
 
 async function selectLibraryEntry(entry) {
+  if (libState.scanning || !libState.entries.includes(entry)) return;
   // V3b: selecting bumps the epoch — clears the previous follow-up question/answer/errors and
   // makes any in-flight read or follow-up response stale. Selection NEVER submits anything.
   const myEpoch = libFollowup.noteSelection();
@@ -648,12 +661,10 @@ function openInAppTerminal(opts = {}) {
     window.ccTTS.speak(action.text);
   };
   // V1a Copy Output — ONE shared path for every pane type, including Video Scout.
-  // Priority: a live pane-local selection wins; the pointer-down snapshot rescues a
-  // selection the header click (or a mouse-mode TUI) cleared between pointer-down and
-  // click — the same mechanism the 🔊 button uses; with no selection at all, the whole
-  // buffer + scrollback is reconstructed under the copy bound (term-copy.js).
+  // A live selection wins. A pointer click can also use the selection visible at the
+  // start of its own press, before the header takes focus. Otherwise use bounded scrollback.
   const copyBtn = pane.querySelector('.copy-out');
-  let selectionAtCopyPointerDown = '';
+  let copyPointer = null;
   let copyFlashTimer = null;
   const flashCopyBtn = (ok) => {
     copyBtn.textContent = ok ? '✓' : '⚠';
@@ -663,21 +674,24 @@ function openInAppTerminal(opts = {}) {
     copyFlashTimer = setTimeout(() => { copyBtn.textContent = '⧉'; copyBtn.classList.remove('flash-ok', 'flash-err'); }, 1400);
   };
   copyBtn.addEventListener('pointerdown', (event) => {
-    // Snapshot BEFORE the click can clear the selection (same rescue as the 🔊 button).
-    selectionAtCopyPointerDown = selectedTextInPane() || speakSelectionMemory.peek();
+    if (event.button !== 0) return;
+    copyPointer = { id: event.pointerId, selection: selectedTextInPane() };
     event.preventDefault();
     event.stopPropagation();
   });
+  copyBtn.addEventListener('pointercancel', () => { copyPointer = null; });
   copyBtn.onclick = (event) => {
     event.preventDefault();
     event.stopPropagation();
+    const snapshot = copyPointer && event.detail > 0 && event.pointerId === copyPointer.id
+      ? copyPointer.selection : '';
+    copyPointer = null;
     const result = window.ccTermCopy.resolveCopyRequest({
       selection: selectedTextInPane(),
-      snapshot: selectionAtCopyPointerDown,
+      snapshot,
       bound: window.ccTermCopy.COPY_OUTPUT_BOUND, // EVERY source is bounded — selections included
       reconstruct: () => window.ccTermCopy.reconstructBufferText(term.buffer.active, window.ccTermCopy.COPY_OUTPUT_BOUND),
     });
-    selectionAtCopyPointerDown = '';
     if (!result.ok) {
       // e.g. an empty pane — refuse visibly (⚠ flash + Logs), never a silent no-op.
       appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, failed: true, reason: result.reason }));
@@ -686,20 +700,22 @@ function openInAppTerminal(opts = {}) {
     }
     // The clipboard write is async IPC to main; do NOT report success until it RESOLVES
     // with { ok:true }. A rejection or { ok:false } flashes ⚠ + a metadata-only FAILED
-    // Logs line + an alert — never a false success. clip.writeText never rejects, and
-    // the trailing .catch is belt-and-suspenders against a future unhandled rejection.
+    // Logs line and an alert.
+    const clipboardFailed = (reason) => {
+      appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, failed: true, reason }));
+      flashCopyBtn(false);
+      alert(`Copy Output failed — nothing was copied.\n\n${reason}`);
+    };
     clip.writeText(result.text).then((res) => {
       if (!res.ok) {
-        appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, failed: true, reason: `clipboardWrite: ${res.error}` }));
-        flashCopyBtn(false);
-        alert(`Copy Output failed — nothing was copied.\n\n${res.error}`);
+        clipboardFailed(`clipboardWrite: ${res.error}`);
         return;
       }
       // Logs carry metadata only, by construction: buildCopyLogLine never receives the text.
       appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, copiedChars: result.copiedChars, totalChars: result.totalChars, truncated: result.truncated }));
       flashCopyBtn(true);
       if (result.truncated) alert(window.ccTermCopy.buildTruncationNotice({ copiedChars: result.copiedChars, totalChars: result.totalChars, role }));
-    }).catch(() => {});
+    }).catch(() => clipboardFailed('clipboardWrite: IPC failed'));
   };
   // MAXIMIZE ROUTES BY OWNERSHIP. Two maximizers exist and exactly one may run for a given pane:
   //   * the classic grid maximizer (pane-maximize.js), which hides the siblings inside
@@ -725,18 +741,20 @@ function openInAppTerminal(opts = {}) {
       openReportForPane(id);
     };
   }
-  const chatBody = pane.querySelector('.chat-body');
-  const paneData = { term, fit, pane, ro, roConnected: true, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
-  paneData.parser = new PtyParser((ev) => {
-    // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
-    // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
-    // line-buffered and ANSI-stripped, so chunk boundaries can't split the marker.
-    if (role === 'video-scout' && !claudeVideoScout && !ev.partial && ev.text && ev.text.includes('[video-scout usage]')) {
-      appendLog(ev.text.trim() + '\n');
-    }
-    paneData.pendingEvents.push(ev);
-    if (paneData.rafId === null) paneData.rafId = requestAnimationFrame(() => drainChatEvents(paneData));
-  });
+  // Xterm is the only terminal history view. The SDK Video Scout still needs the
+  // line-buffered, ANSI-stripped usage record in Logs, even when split across PTY chunks.
+  // The pane's other lines are model output, so only an exact usage line is copied
+  // (video-scout-usage-line.js).
+  const usageLogGate = (role === 'video-scout' && !claudeVideoScout)
+    ? window.ccVideoScoutUsage.createUsageLogGate() : null;
+  const usageParser = usageLogGate
+    ? new PtyParser((ev) => {
+        if (ev.partial || !ev.text) return;
+        const logLine = usageLogGate.consider(ev.text);
+        if (logLine) appendLog(logLine);
+      }, { completedLinesOnly: true, maxPendingChars: 4096 })
+    : null;
+  const paneData = { term, fit, pane, ro, roConnected: true, role, usageParser };
   // The ONE close path for this pane. Extracted from the close button's handler (behaviour and
   // ordering are unchanged) and made IDEMPOTENT so that a second caller cannot double-kill a PTY or
   // double-dispose an xterm. On the Dockview prototype branch a panel-removal event is that second
@@ -763,7 +781,6 @@ function openInAppTerminal(opts = {}) {
     try { selectionDisposable.dispose(); } catch {}
     try { mouseSelectionFallback.dispose(); } catch {}
     if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
-    if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     if (claudeVideoScout) {
       // Stop local Whisper too (Codex finding), so Dictate and the next run aren't left busy.
       if (window.ccSTT && window.ccSTT.cancelVideoTranscription) window.ccSTT.cancelVideoTranscription(id);
@@ -786,7 +803,6 @@ function openInAppTerminal(opts = {}) {
     try { selectionDisposable.dispose(); } catch {}
     try { mouseSelectionFallback.dispose(); } catch {}
     if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
-    if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
@@ -864,6 +880,8 @@ function openInAppTerminal(opts = {}) {
     if (!terms.has(id)) return;
     fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus();
   }, 40);
+  // Session recovery waits for main to acknowledge the PTY before removing its offer.
+  return startResult;
 }
 
 // ---- Dockview layout engine scripts ------------------------------------------------------------
@@ -1355,34 +1373,40 @@ function buildDockviewHost(container) {
 async function offerResume() {
   const host = $('#resumeHost');
   if (!host || !window.ccSessionResumeView) return;
-  const dismiss = (row) => Promise.resolve(cc.sessionResumeDismiss(row.sessionId))
-    .then((r) => { if (!r || r.ok !== true) appendLog(`[resume] could not record your choice: ${(r && r.error) || 'unknown'}\n`); })
-    .catch(() => appendLog('[resume] could not record your choice: ipc-rejected\n'));
-  const paneOpts = (row) => ({ worktree: row.worktree, role: row.role || undefined, cli: 'claude' });
+  const dismiss = async (row) => {
+    try {
+      const result = await cc.sessionResumeDismiss(row.sessionId);
+      if (!result || result.ok !== true) appendLog(`[resume] could not record your choice: ${(result && result.error) || 'unknown'}\n`);
+    } catch {
+      appendLog('[resume] could not record your choice: ipc-rejected\n');
+    }
+  };
+  async function launch(row, resume) {
+    // Maximum sends Claude tasks to a cloud session, which cannot use this local recovery offer.
+    if (state.authority === 'maximum') {
+      appendLog('[resume] Maximum starts no local Claude pane. Pick another authority level and try again.\n');
+      return false;
+    }
+    if (resume) appendLog(`[resume] resuming a ${row.role || 'claude'} pane with claude --resume\n`);
+    try {
+      const result = await openInAppTerminal({
+        worktree: row.worktree, role: row.role || undefined, cli: 'claude',
+        ...(resume ? { resumeSessionId: row.sessionId } : {}),
+      });
+      if (result?.ok !== true) return false;
+    } catch {
+      appendLog('[resume] could not start the pane. The recovery offer is still available.\n');
+      return false;
+    }
+    if (!resume) await dismiss(row);
+    return true;
+  }
   const resumeView = window.ccSessionResumeView.create({
     document,
     host,
     roleLabel: (r) => (ROLES[r] ? ROLES[r].label : r),
-    onResume: (row) => {
-      // Maximum sends Claude tasks to a cloud session, which can't continue a conversation on this PC.
-      if (state.authority === 'maximum') {
-        appendLog('[resume] Maximum starts no local Claude pane, so nothing can be resumed here. Pick another authority level, then Resume.\n');
-        return false;
-      }
-      appendLog(`[resume] resuming a ${row.role || 'claude'} pane with claude --resume\n`);
-      openInAppTerminal(Object.assign(paneOpts(row), { resumeSessionId: row.sessionId }));
-      return true;
-    },
-    onFresh: (row) => {
-      // Same rule as Resume: at Maximum nothing starts here, so the session isn't dismissed either.
-      if (state.authority === 'maximum') {
-        appendLog('[resume] Maximum starts no local Claude pane. Pick another authority level, then Start fresh.\n');
-        return false;
-      }
-      dismiss(row);
-      openInAppTerminal(paneOpts(row));
-      return true;
-    },
+    onResume: (row) => launch(row, true),
+    onFresh: (row) => launch(row, false),
     onDismiss: dismiss,
   });
   let offer = null;
@@ -1509,7 +1533,7 @@ function fillGeneralSettings() {
   pick.id = 'makoThemeSelect';
   for (const o of Array.from(theme.options)) { const c = document.createElement('option'); c.value = o.value; c.textContent = o.textContent; pick.appendChild(c); }
   pick.value = theme.value;
-  pick.onchange = () => { applyTheme(pick.value); };
+  pick.onchange = () => changeTheme(pick.value);
   label.appendChild(pick);
   const folder = document.createElement('button');
   folder.type = 'button';
@@ -1610,13 +1634,13 @@ async function boot() {
   appendLog(`[build] ${buildLabel}\n`);
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
-    if (t) { t.term.write(data); t.parser.feed(data); }
+    if (t) { t.term.write(data); t.usageParser?.feed(data); }
   });
   cc.onPtyExit(({ id }) => {
     const t = terms.get(id);
     if (t) {
       t.term.options.disableStdin = true;
-      t.parser.flush();
+      t.usageParser?.flush();
       t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n');
     }
   });
@@ -1843,13 +1867,21 @@ function setupTTSControls() {
     voiceSel.dataset.filled = '1';
     voiceSel.value = state.ttsVoice || tts.getVoice();
     tts.setVoice(voiceSel.value);
-    voiceSel.onchange = () => { tts.setVoice(voiceSel.value); state.ttsVoice = voiceSel.value; cc.saveSettings({ ttsVoice: voiceSel.value }); };
+    voiceSel.onchange = () => {
+      tts.setVoice(voiceSel.value);
+      state.ttsVoice = voiceSel.value;
+      return savePreference('ttsVoice', state.ttsVoice, 'the speech voice');
+    };
   }
   const speedSel = $('#ttsSpeed');
   if (speedSel) {
     speedSel.value = String(state.ttsSpeed || 1);
     tts.setSpeed(speedSel.value);
-    speedSel.onchange = () => { tts.setSpeed(speedSel.value); state.ttsSpeed = Number(speedSel.value); cc.saveSettings({ ttsSpeed: state.ttsSpeed }); };
+    speedSel.onchange = () => {
+      tts.setSpeed(speedSel.value);
+      state.ttsSpeed = Number(speedSel.value);
+      return savePreference('ttsSpeed', state.ttsSpeed, 'the speech speed');
+    };
   }
   const stopBtn = $('#ttsStop');
   if (stopBtn) stopBtn.onclick = () => tts.stop();
@@ -1861,8 +1893,19 @@ function setupTTSControls() {
   });
 }
 
+let repoChangeGeneration = 0;
+let worktreeRefreshGeneration = 0;
+// The repo whose last agent refresh failed ('' when it succeeded); the cards show it, not "No agents".
+let agentRefreshFailedFor = '';
+
 async function refreshRepos() {
-  const { repos, selectedRepo } = await cc.listRepos();
+  const generation = repoChangeGeneration;
+  let response;
+  try { response = await cc.listRepos(); }
+  catch (e) { appendLog(`[repositories] list failed: ${e?.message || e}\n`); return; }
+  if (generation !== repoChangeGeneration) return;
+  if (!Array.isArray(response?.repos)) { appendLog('[repositories] list refused: invalid response\n'); return; }
+  const { repos, selectedRepo } = response;
   const sel = $('#repoSelect');
   sel.innerHTML = '';
   if (repos.length === 0) {
@@ -1877,26 +1920,67 @@ async function refreshRepos() {
     o.textContent = r.split(/[\\/]/).pop();
     sel.appendChild(o);
   }
-  state.repo = repos.includes(selectedRepo) ? selectedRepo : (repos[0] || '');
-  sel.value = state.repo;
-  await onRepoChange();
+  const repo = repos.includes(selectedRepo) ? selectedRepo : (repos[0] || '');
+  sel.value = repo;
+  await onRepoChange(repo);
 }
 
-async function onRepoChange() {
+async function onRepoChange(repo) {
+  const generation = ++repoChangeGeneration;
+  const github = $('#openGithub');
+  if (repo !== state.repo) {
+    state.repo = repo;
+    state.githubUrl = '';
+    state.worktrees = [];
+    agentRefreshFailedFor = '';
+    renderAgentList();
+    renderAgentGrid();
+  }
   if (shell) shell.refreshScope();   // S66: the scope stripe names the repo in use
   refreshEmblemRail();
-  await cc.saveSettings({ selectedRepo: state.repo });
-  state.githubUrl = state.repo ? await cc.repoGithubUrl(state.repo) : '';
-  await refreshAgents();
+  github.disabled = !state.githubUrl;
+  const agents = refreshAgents();
+  // Saving the selection must not hold up repository data or startup's control wiring.
+  // savePreference logs and shows its own failure, so nothing here waits on it.
+  void savePreference('selectedRepo', repo, 'the selected repository');
+  let url = '';
+  try {
+    if (repo) url = await cc.repoGithubUrl(repo);
+  } catch (e) {
+    appendLog(`[repositories] could not read the GitHub link: ${e?.message || e}\n`);
+  }
+  if (generation === repoChangeGeneration && repo === state.repo) {
+    state.githubUrl = url;
+    github.disabled = !url;
+  }
+  await agents;
 }
 
 // ---- agents -----------------------------------------------------------------
 async function refreshAgents() {
+  const repo = state.repo;
+  const generation = ++worktreeRefreshGeneration;
   appendLog('[TIMING] refreshAgents: listWorktrees START\n');
-  const all = state.repo ? await cc.listWorktrees(state.repo) : [];
+  let all;
+  let failure = '';
+  try { all = repo ? await cc.listWorktrees(repo) : []; }
+  catch (e) { failure = `could not refresh agents: ${e?.message || e}`; }
+  if (!failure && !Array.isArray(all)) failure = 'agent refresh refused: invalid response';
+  if (failure) {
+    appendLog(`[repositories] ${failure}\n`);
+    // Only the newest refresh of the selected repo may change what the cards say. An empty list
+    // after a failure must not look like a repo with no agents, so the cards name the failure.
+    if (generation !== worktreeRefreshGeneration || repo !== state.repo) return;
+    agentRefreshFailedFor = repo;
+    renderAgentList();
+    renderAgentGrid();
+    return;
+  }
   appendLog(`[TIMING] refreshAgents: listWorktrees END (${all.length} items)\n`);
-  // The first worktree is the main checkout; the rest are agents.
-  state.worktrees = all.filter((w) => !w.branch || w.branch !== 'main');
+  if (generation !== worktreeRefreshGeneration || repo !== state.repo) return;
+  agentRefreshFailedFor = '';
+  // Git lists the primary checkout first, regardless of its branch.
+  state.worktrees = all.slice(1);
   renderAgentList();
   renderAgentGrid();
 }
@@ -1923,9 +2007,18 @@ function agentColorOf(wt) {
   return 'claude';
 }
 
+// The repo path comes from disk, so it is set as text, never as HTML.
+function agentRefreshFailedNote(className) {
+  const note = document.createElement('div');
+  note.className = className;
+  note.textContent = `Could not list agents for ${agentRefreshFailedFor.split(/[\\/]/).pop()}; see Logs.`;
+  return note;
+}
+
 function renderAgentList() {
   const list = $('#agentList');
   if (state.worktrees.length === 0) {
+    if (agentRefreshFailedFor) { list.innerHTML = ''; list.appendChild(agentRefreshFailedNote('empty')); return; }
     list.innerHTML = '<div class="empty">No agents yet. Click <b>+ New</b>.</div>';
     return;
   }
@@ -1947,6 +2040,7 @@ function renderAgentGrid() {
   const grid = $('#agentGrid');
   grid.innerHTML = '';
   if (state.worktrees.length === 0) {
+    if (agentRefreshFailedFor) { grid.appendChild(agentRefreshFailedNote('empty muted')); return; }
     grid.innerHTML = '<div class="empty muted">No active agents. Use <b>+ New</b> in the sidebar.</div>';
     return;
   }
@@ -2029,16 +2123,74 @@ function updateAgentTokenBanner(status) {
 }
 
 // ---- logs -------------------------------------------------------------------
-function appendLog(text) {
+const LOG_TEXT_LIMIT = 128 * 1024;
+const LOG_PENDING_LIMIT = LOG_TEXT_LIMIT + 4096;
+const LOG_TRUNCATED = '[Older log output truncated]\n';
+let visibleLogText = '';
+let pendingLogText = '';
+let pendingLogTruncated = false;
+let logTruncated = false;
+let logFrame = null;
+let followLogTail = true;
+
+function logsAtBottom(log) {
+  return log.scrollHeight - log.clientHeight - log.scrollTop <= 1;
+}
+
+function trimmedLogPrefix(text) {
+  const overflow = text.length - LOG_TEXT_LIMIT;
+  if (overflow <= 0) return 0;
+  // Prefer a whole-line boundary if nearby. A single long line still has a hard bound.
+  const newline = text.slice(overflow - 1, overflow + 1024).indexOf('\n');
+  if (newline >= 0 && overflow + newline < text.length) return overflow + newline;
+  const first = text.charCodeAt(overflow);
+  return first >= 0xdc00 && first <= 0xdfff ? overflow + 1 : overflow;
+}
+
+function logTextTop(log, offset) {
+  const range = document.createRange();
+  range.setStart(log.firstChild, offset);
+  range.collapse(true);
+  return range.getBoundingClientRect().top + log.scrollTop;
+}
+
+function flushLogs() {
+  logFrame = null;
   const log = $('#logView');
-  log.textContent += text;
-  log.scrollTop = log.scrollHeight;
+  const visible = log.clientHeight > 0;
+  const atBottom = visible && logsAtBottom(log);
+  const combined = pendingLogTruncated ? pendingLogText : visibleLogText + pendingLogText;
+  const trim = trimmedLogPrefix(combined);
+  const dropped = pendingLogTruncated ? visibleLogText.length : trim;
+  const scrollTop = log.scrollTop;
+  // Measure the first surviving character's position before and after removing the prefix.
+  // This keeps the same content in view when the log wraps.
+  const anchor = visible && !atBottom && dropped > 0 && dropped < visibleLogText.length
+    ? logTextTop(log, (logTruncated ? LOG_TRUNCATED.length : 0) + dropped) : null;
+  logTruncated ||= pendingLogTruncated || trim > 0;
+  visibleLogText = combined.slice(trim);
+  pendingLogText = '';
+  pendingLogTruncated = false;
+  log.textContent = (logTruncated ? LOG_TRUNCATED : '') + visibleLogText;
+  if (!visible) return;
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  else if (anchor !== null) log.scrollTop = Math.max(0, scrollTop + logTextTop(log, LOG_TRUNCATED.length) - anchor);
+  else log.scrollTop = dropped ? 0 : scrollTop;
+}
+
+function appendLog(text) {
+  pendingLogText += text;
+  if (pendingLogText.length > LOG_PENDING_LIMIT) {
+    pendingLogText = pendingLogText.slice(trimmedLogPrefix(pendingLogText));
+    pendingLogTruncated = true;
+  }
+  if (logFrame === null) logFrame = requestAnimationFrame(flushLogs);
 }
 
 // ---- wiring -----------------------------------------------------------------
 function wireUi() {
-  $('#repoSelect').onchange = (e) => { state.repo = e.target.value; onRepoChange(); };
-  $('#themeSelect').onchange = (e) => applyTheme(e.target.value);
+  $('#repoSelect').onchange = (e) => onRepoChange(e.target.value);
+  $('#themeSelect').onchange = (e) => changeTheme(e.target.value);
   {
     // S10: one click sets the authority for every Claude pane started after it (not running ones).
     const sel = $('#authoritySelect');
@@ -2110,15 +2262,32 @@ function wireUi() {
     // banner and keeps the input so the token can be fixed; the input is cleared only once stored.
     const input = $('#agentTokenInput');
     const status = $('#agentTokenStatus');
+    const button = $('#agentTokenSave');
     const token = input.value;
     if (!token.trim()) { status.textContent = 'Paste the token first.'; input.focus(); return; }
+    button.disabled = true;
     status.textContent = 'Saving…';
-    const r = await cc.setAgentToken(token);
+    status.classList.toggle('error', false);
+    let r;
+    let invokeFailure;
+    try {
+      r = await cc.setAgentToken(token);
+    } catch (error) {
+      invokeFailure = 'token save request failed';
+      const reason = typeof error === 'string' ? error : error?.message;
+      r = { ok: false, error: typeof reason === 'string' && reason ? reason.replaceAll(token, '[redacted]') : invokeFailure };
+    } finally {
+      button.disabled = false;
+    }
     const msg = window.ccAgentTokenView.saveResultMessage(r);
     status.textContent = msg.text;
     status.classList.toggle('error', !msg.ok);
     if (msg.ok) { input.value = ''; updateAgentTokenBanner({ ok: true, hasToken: true }); }
-    else { appendLog(`[agent token] save failed: ${msg.text}\n`); input.focus(); }
+    else {
+      // An unexpected rejection can carry arbitrary text. Only log the known IPC failure.
+      appendLog(`[agent token] save failed: ${invokeFailure || msg.text}\n`);
+      input.focus();
+    }
   };
   $('#agentTokenInput').onkeydown = (e) => { if (e.key === 'Enter') $('#agentTokenSave').click(); };
   $('#agentTokenChange').onclick = () => updateAgentTokenBanner({ ok: true, hasToken: false });
@@ -2132,6 +2301,7 @@ function wireUi() {
   $('#newAgent').onclick = openModal;
   $('#modalCancel').onclick = closeModal;
   $('#modalCreate').onclick = createAgent;
+  $('#taskName').oninput = () => showVideoUrlError('');
   // S15: hand the last page-reader report to the Reviewer. MAIN copies report.md into a fresh folder
   // (never the page-reader's own, which a page-reading agent can write) and names that folder and the
   // Reviewer's fixed opening line; the renderer supplies neither.
@@ -2243,6 +2413,7 @@ function updateAnalysisFocusCounter() {
 // `mode` is 'video', 'page' or anything else for a task name (a bare `true` still means video).
 function setTaskInputMode(mode) {
   const lbl = $('#taskNameLabel'); const inp = $('#taskName');
+  showVideoUrlError('');
   if (mode === true || mode === 'video') {
     if (lbl) lbl.innerHTML = 'Video URL';
     if (inp) inp.placeholder = 'https://youtu.be/…';
@@ -2371,11 +2542,15 @@ function updateVideoRangeVisibility() {
 // mirrors YOUTUBE_HOSTS in video-scout-args.js and the YouTube subset of VIDEO_HOSTS in main.js
 // (which remain the authority; a bypassed renderer is still refused there). Used only to block a
 // range + non-YouTube launch in the UI before a dead pane is ever created.
-function isYouTubeUrl(url) {
-  try {
-    const h = new URL(url).hostname.toLowerCase();
-    return h === 'youtube.com' || h === 'www.youtube.com' || h === 'm.youtube.com' || h === 'youtu.be';
-  } catch { return false; }
+function isYouTubeHost(host) {
+  return host === 'youtube.com' || host === 'www.youtube.com' || host === 'm.youtube.com' || host === 'youtu.be';
+}
+
+function showVideoUrlError(message) {
+  const error = $('#videoUrlError');
+  error.textContent = message;
+  error.classList.toggle('hidden', !message);
+  $('#taskName').setAttribute('aria-invalid', String(Boolean(message)));
 }
 
 function syncVideoProvider() {
@@ -2417,8 +2592,17 @@ function populateTargets() {
   for (const wt of state.worktrees) add(wt.path, displayNameOf(wt));
 }
 
+// A pending video submission belongs to this opening of the dialog. Closing or reopening it
+// invalidates the submission so a late key check cannot launch from, or close, the next dialog.
+let videoSubmission = null;
+function releaseVideoSubmission() {
+  videoSubmission = null;
+  $('#modalCreate').disabled = false;
+}
+
 function openModal() {
   if (!state.repo) { alert('Pick a repo first (set your projects root with 📁).'); return; }
+  releaseVideoSubmission();
   $('#taskName').value = '';
   // reset to Builder default
   state.chosenRole = 'builder'; state.hardTask = false;
@@ -2468,6 +2652,7 @@ function openModal() {
   $('#taskName').focus();
 }
 function closeModal() {
+  releaseVideoSubmission();
   $('#modal').classList.add('hidden');
   $('#terminalGrid').style.pointerEvents = '';
 }
@@ -2505,7 +2690,6 @@ function writeClaudeVideoPane(id, text) {
   // characters, tabs, and newlines to xterm so the report can't emit controls.
   const data = text.replace(/\r\n/g, '\n').replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '').replace(/\n/g, '\r\n');
   pane.term.write(data + '\r\n');
-  pane.parser.feed(data + '\r\n');
 }
 
 // S54 settings (D-065). Each default is a setting the user can change; the values are remembered
@@ -2653,102 +2837,149 @@ async function handleClaudeVideoEvent({ id, token, status, estimate, pcm }) {
   }
 }
 
-async function createAgent() {
-  await cc.tlogReset();
-  appendLog('[TIMING] createAgent: START\n');
-  const role = state.chosenRole;
-  const meta = role !== 'plain' ? ROLES[role] : null;
-
-  // Video Scout uses the selected provider for this URL.
-  if (meta && meta.video) {
-    const url = $('#taskName').value.trim();
-    if (!/^https?:\/\/\S+$/.test(url)) { alert('Enter a video URL (starting with http:// or https://).'); $('#taskName').focus(); return; }
-    const provider = $('#videoProviderSelect').value;
-    if (provider !== 'claude' && provider !== 'gemini') {
-      alert('Choose Gemini or Claude Code for Video Scout.');
-      return;
-    }
-    if (provider === 'claude') {
-      const focusOpt = readVideoAnalysisFocus();
-      if (!focusOpt) return;
-      const claudeSettings = readClaudeVideoSettings();
-      if (!claudeSettings) return;
-      closeModal();
-      openInAppTerminal({
-        role, claudeVideoScout: true, videoUrl: url, ...focusOpt, claudeVideoSettings: claudeSettings,
-        title: `Video Scout · Claude · ${new URL(url).hostname}`,
-      });
-      return;
-    }
-    const ks = await geminiKeyStatusOrLog();
-    if (!ks || !ks.hasKey) {
-      closeModal();
-      if (ks) appendLog('[video-scout] GEMINI_API_KEY not stored — enter it in the key setup banner.\n');
-      updateKeyBanner({ hasKey: false });
-      $('#geminiKeyInput').focus();
-      return;
-    }
-    // Time slices: only meaningful in video mode (transcript/audio have no video stream to slice —
-    // the rows are hidden then too, see updateVideoRangeVisibility). On ANY failure we BLOCK
-    // submission with visible inline feedback, mark the offending row(s), and do NOT fall back to
-    // whole-video — a user who asked for slices must never be silently downgraded to (and billed
-    // for) the whole video. Whole-video is only the explicit all-blank path. This is immediate-
-    // feedback UX; main.js (video-scout-args.js) independently refuses on the pty-start IPC handler
-    // as the bypass-proof enforcement boundary.
-    const rangeErrEl = $('#videoRangeError');
-    const showRangeError = (msg, badRows) => {
-      if (rangeErrEl) { rangeErrEl.textContent = msg; rangeErrEl.classList.remove('hidden'); }
-      const bad = Array.isArray(badRows) && badRows.length ? badRows : sliceRows.map((_, i) => i);
-      for (const i of bad) {
-        const r = sliceRows[i];
-        if (r) { r.startEl.classList.add('invalid'); r.endEl.classList.add('invalid'); }
-      }
-      appendLog(`[video-scout] launch blocked: ${msg}\n`);
-    };
-    clearSliceRowErrors();
-
-    // Belt check: clear-on-hide (updateVideoRangeVisibility) guarantees a non-video mode has blank
-    // rows, so this is unreachable in normal operation. If it ever fires, some path bypassed
-    // clear-on-hide — log it loudly rather than let stale slices slip by unnoticed.
-    const stale = videoRangeUi.detectStaleSliceRows({ analysisMode: state.analysisMode, rows: collectSliceRowValues() });
-    if (stale) appendLog(`[video-scout] ${stale}\n`);
-
-    let rangeOpts = {};
-    let rangeLogSuffix = '';
-    if (state.analysisMode === 'video') {
-      const cls = videoRangeUi.classifySliceRows({ rows: collectSliceRowValues() });
-      if (cls.kind === 'error') {
-        showRangeError(cls.message, cls.badRows);
-        return; // modal stays open, rows + error visible — do not launch, no pane
-      }
-      if (cls.kind === 'single' || cls.kind === 'multi') {
-        if (!isYouTubeUrl(url)) {
-          showRangeError('Time slices only work for YouTube URLs (analyzed directly via the Gemini API). Clear the slices, or use a YouTube URL.');
-          return; // modal stays open — do not create a pane that main would refuse anyway
-        }
-      }
-      if (cls.kind === 'single') {
-        // One populated row = the existing single-slice scalar path, unchanged end to end.
-        rangeOpts = { startOffset: cls.startOffset, endOffset: cls.endOffset };
-        rangeLogSuffix = `, range: ${cls.startOffset}s-${cls.endOffset}s`;
-      } else if (cls.kind === 'multi') {
-        // 2-8 rows = the V4 path: ONE submission, ONE provider request with N ordered parts.
-        rangeOpts = { sliceRanges: cls.ranges };
-        rangeLogSuffix = `, slices: ${cls.ranges.length} (aggregate ${cls.aggregateSeconds}s)`;
-      }
-    }
+async function launchVideoScout(role, url, submission) {
+  const taskInput = $('#taskName');
+  showVideoUrlError('');
+  const parsed = /^https?:\/\/\S+$/.test(url) ? URL.parse(url) : null;
+  if (!parsed?.hostname) {
+    showVideoUrlError('Enter a valid video URL starting with http:// or https://.');
+    taskInput.focus();
+    return;
+  }
+  const host = parsed.hostname;
+  const provider = $('#videoProviderSelect').value;
+  if (provider !== 'claude' && provider !== 'gemini') {
+    alert('Choose Gemini or Claude Code for Video Scout.');
+    return;
+  }
+  if (provider === 'claude') {
     const focusOpt = readVideoAnalysisFocus();
     if (!focusOpt) return;
-    const focusLogSuffix = focusOpt.analysisFocus ? `, focus: ${focusOpt.analysisFocus.length} chars` : '';
+    const claudeSettings = readClaudeVideoSettings();
+    if (!claudeSettings) return;
+    await resetCreateAgentTiming();
+    if (videoSubmission !== submission) return;
     closeModal();
-    appendLog(`\n[video-scout] downloading + analyzing ${url}… (mode: ${state.analysisMode}, model: ${state.videoModel}, media resolution: ${state.mediaResolution}${rangeLogSuffix}${focusLogSuffix})\n`);
     openInAppTerminal({
-      worktree: state.repo || undefined, role, videoScout: true, videoUrl: url,
-      videoModel: state.videoModel, mediaResolution: state.mediaResolution, analysisMode: state.analysisMode,
-      ...rangeOpts,
-      ...focusOpt,
-      title: `Video Scout · ${new URL(url).hostname}`,
+      role, claudeVideoScout: true, videoUrl: url, ...focusOpt, claudeVideoSettings: claudeSettings,
+      title: `Video Scout · Claude · ${host}`,
     });
+    return;
+  }
+
+  const { repo, analysisMode, videoModel, mediaResolution } = state;
+  // Time slices: only meaningful in video mode (transcript/audio have no video stream to slice —
+  // the rows are hidden then too, see updateVideoRangeVisibility). On ANY failure we BLOCK
+  // submission with visible inline feedback, mark the offending row(s), and do NOT fall back to
+  // whole-video — a user who asked for slices must never be silently downgraded to (and billed
+  // for) the whole video. Whole-video is only the explicit all-blank path. This is immediate-
+  // feedback UX; main.js (video-scout-args.js) independently refuses on the pty-start IPC handler
+  // as the bypass-proof enforcement boundary.
+  const rangeErrEl = $('#videoRangeError');
+  const showRangeError = (msg, badRows) => {
+    if (rangeErrEl) { rangeErrEl.textContent = msg; rangeErrEl.classList.remove('hidden'); }
+    const bad = Array.isArray(badRows) && badRows.length ? badRows : sliceRows.map((_, i) => i);
+    for (const i of bad) {
+      const r = sliceRows[i];
+      if (r) { r.startEl.classList.add('invalid'); r.endEl.classList.add('invalid'); }
+    }
+    appendLog(`[video-scout] launch blocked: ${msg}\n`);
+  };
+  clearSliceRowErrors();
+
+  // Belt check: clear-on-hide (updateVideoRangeVisibility) guarantees a non-video mode has blank
+  // rows, so this is unreachable in normal operation. If it ever fires, some path bypassed
+  // clear-on-hide — log it loudly rather than let stale slices slip by unnoticed.
+  const stale = videoRangeUi.detectStaleSliceRows({ analysisMode, rows: collectSliceRowValues() });
+  if (stale) appendLog(`[video-scout] ${stale}\n`);
+
+  let rangeOpts = {};
+  let rangeLogSuffix = '';
+  if (analysisMode === 'video') {
+    const cls = videoRangeUi.classifySliceRows({ rows: collectSliceRowValues() });
+    if (cls.kind === 'error') {
+      showRangeError(cls.message, cls.badRows);
+      return; // modal stays open, rows + error visible — do not launch, no pane
+    }
+    if ((cls.kind === 'single' || cls.kind === 'multi') && !isYouTubeHost(host)) {
+      showRangeError('Time slices only work for YouTube URLs (analyzed directly via the Gemini API). Clear the slices, or use a YouTube URL.');
+      return; // modal stays open — do not create a pane that main would refuse anyway
+    }
+    if (cls.kind === 'single') {
+      // One populated row = the existing single-slice scalar path, unchanged end to end.
+      rangeOpts = { startOffset: cls.startOffset, endOffset: cls.endOffset };
+      rangeLogSuffix = `, range: ${cls.startOffset}s-${cls.endOffset}s`;
+    } else if (cls.kind === 'multi') {
+      // 2-8 rows = the V4 path: ONE submission, ONE provider request with N ordered parts.
+      rangeOpts = { sliceRanges: cls.ranges };
+      rangeLogSuffix = `, slices: ${cls.ranges.length} (aggregate ${cls.aggregateSeconds}s)`;
+    }
+  }
+  const focusOpt = readVideoAnalysisFocus();
+  if (!focusOpt) return;
+  const focusLogSuffix = focusOpt.analysisFocus ? `, focus: ${focusOpt.analysisFocus.length} chars` : '';
+  await resetCreateAgentTiming();
+  if (videoSubmission !== submission) return;
+  const ks = await geminiKeyStatusOrLog();
+  if (videoSubmission !== submission) return;
+  if (!ks) {
+    alert('Could not check the Gemini key status. See Logs for details, then try again.');
+    return;
+  }
+  if (!ks.hasKey) {
+    closeModal();
+    appendLog('[video-scout] GEMINI_API_KEY not stored — enter it in the key setup banner.\n');
+    updateKeyBanner({ hasKey: false });
+    $('#geminiKeyInput').focus();
+    return;
+  }
+
+  closeModal();
+  appendLog(`\n[video-scout] downloading + analyzing ${url}… (mode: ${analysisMode}, model: ${videoModel}, media resolution: ${mediaResolution}${rangeLogSuffix}${focusLogSuffix})\n`);
+  openInAppTerminal({
+    worktree: repo || undefined, role, videoScout: true, videoUrl: url,
+    videoModel, mediaResolution, analysisMode, ...rangeOpts, ...focusOpt,
+    title: `Video Scout · ${host}`,
+  });
+}
+
+async function resetCreateAgentTiming() {
+  await cc.tlogReset();
+  appendLog('[TIMING] createAgent: START\n');
+}
+
+async function createAgent() {
+  if (videoSubmission) return;
+  const { chosenRole: role, chosenCli, hardTask, repo } = state;
+  const meta = role !== 'plain' ? ROLES[role] : null;
+  const input = $('#taskName').value.trim();
+
+  if (meta && meta.video) {
+    const submission = {};
+    videoSubmission = submission;
+    $('#modalCreate').disabled = true;
+    try {
+      await launchVideoScout(role, input, submission);
+    } catch (error) {
+      appendLog(`[video-scout] launch failed: ${(error && error.message) || String(error)}\n`);
+      if (videoSubmission === submission) alert('Could not start Video Scout. See Logs for details, then try again.');
+    } finally {
+      if (videoSubmission === submission) releaseVideoSubmission();
+    }
+    return;
+  }
+
+  const needsWorktree = role === 'plain' || meta?.needsWorktree;
+  const task = input.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
+  if (needsWorktree) {
+    if (!task) { $('#taskName').focus(); return; }
+    closeModal();
+  }
+  try {
+    await resetCreateAgentTiming();
+  } catch {
+    appendLog('[agent] could not start launch timing: ipc-rejected\n');
+    alert('Could not start the launch. See Logs for details, then try again.');
     return;
   }
 
@@ -2789,40 +3020,41 @@ async function createAgent() {
     return;
   }
 
-  const task = $('#taskName').value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
-  if (!task) { $('#taskName').focus(); return; }
-  closeModal();
-
-  // Plain: today's behavior — fresh worktree + a bare CLI.
-  if (role === 'plain') {
-    appendLog(`\n[agent] worktree agent/${task} (plain ${state.chosenCli})…\n`);
-    appendLog('[TIMING] createAgent: newAgent START\n');
-    const res = await cc.newAgent({ repo: state.repo, task });
-    appendLog('[TIMING] createAgent: newAgent END\n');
-    appendLog('[TIMING] createAgent: refreshAgents START\n');
-    await refreshAgents();
-    appendLog('[TIMING] createAgent: refreshAgents END\n');
+  if (needsWorktree) {
+    const description = role === 'plain' ? `plain ${chosenCli}` : `${role}${hardTask ? ', opus/xhigh' : ''}`;
+    appendLog(`\n[agent] worktree agent/${task} (${description})…\n`);
+    let res;
+    try {
+      appendLog('[TIMING] createAgent: newAgent START\n');
+      res = await cc.newAgent({ repo, task });
+      appendLog('[TIMING] createAgent: newAgent END\n');
+      appendLog('[TIMING] createAgent: refreshAgents START\n');
+      await refreshAgents();
+      appendLog('[TIMING] createAgent: refreshAgents END\n');
+    } catch (error) {
+      const why = (error && error.message) || String(error);
+      if (!res) {
+        appendLog(`[agent] could not create worktree for "${task}": ${why}\n`);
+        alert('Could not create the worktree. See Logs for details, then try again.');
+      } else if (worktreeOk(res, task)) {
+        appendLog(`[agent] could not refresh the worktree list; the terminal was not started: ${why}\n`);
+        alert('The worktree was created, but Mako could not refresh the Agents list to open it. See Logs for details.');
+      }
+      return;
+    }
     if (!worktreeOk(res, task)) return;
-    appendLog('[TIMING] createAgent: openInAppTerminal (plain)\n');
-    openInAppTerminal({ worktree: res.worktree, cli: state.chosenCli });
-    return;
-  }
-
-  if (meta.needsWorktree) {
-    // Builder: fresh worktree, launched with the role (Opus override when Hard is checked).
-    appendLog(`\n[agent] worktree agent/${task} (${role}${state.hardTask ? ', opus/xhigh' : ''})…\n`);
-    appendLog('[TIMING] createAgent: newAgent START\n');
-    const res = await cc.newAgent({ repo: state.repo, task });
-    appendLog('[TIMING] createAgent: newAgent END\n');
-    appendLog('[TIMING] createAgent: refreshAgents START\n');
-    await refreshAgents();
-    appendLog('[TIMING] createAgent: refreshAgents END\n');
-    if (!worktreeOk(res, task)) return;
-    const model = state.hardTask ? 'opus' : undefined;
-    const effort = state.hardTask ? 'xhigh' : undefined;
+    if (role === 'plain') {
+      appendLog('[TIMING] createAgent: openInAppTerminal (plain)\n');
+      openInAppTerminal({ worktree: res.worktree, cli: chosenCli });
+      return;
+    }
+    const model = hardTask ? 'opus' : undefined;
+    const effort = hardTask ? 'xhigh' : undefined;
     appendLog('[TIMING] createAgent: openInAppTerminal (builder)\n');
     openInAppTerminal({ worktree: res.worktree, role, cli: 'claude', model, effort, title: `${meta.label} · ${task}` });
   } else {
+    if (!task) { $('#taskName').focus(); return; }
+    closeModal();
     // Web-Scout / Operator: run in a dedicated fenced sandbox outside any repo. Its
     // PreToolUse write-fence confines writes to this dir — it can't touch a repo.
     // FAIL CLOSED: confirm the fence is actually deployed before launching a write-capable
