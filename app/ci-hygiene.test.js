@@ -45,11 +45,18 @@ assert(usesCount >= 5, `every uses: line was checked (${usesCount} found, at lea
 
 process.stdout.write('\nCI job names match the required checks on main\n');
 const ci = fs.readFileSync(path.join(workflowsDir, 'ci.yml'), 'utf8');
+const guardrailGuide = fs.readFileSync(path.join(repoRoot, 'docs', 'SETUP-GUARDRAILS.md'), 'utf8');
 // Anchored to the job key, so a step that happens to carry the same text can't stand in for it.
 for (const [job, check] of [['app', 'App tests (Windows)'], ['pester', 'PowerShell tests (Windows)']]) {
   assert(new RegExp(`^  ${job}:\\r?\\n    name: ${check.replace(/[()]/g, '\\$&')}\\s*$`, 'm').test(ci),
     `ci.yml job "${job}" is named "${check}"`);
+  assert(guardrailGuide.includes(`**${check}** — **GitHub Actions**.`),
+    `guardrail setup identifies GitHub Actions as the expected source for "${check}"`);
 }
+const blueChecklist = fs.readFileSync(path.join(repoRoot, 'BLUE-CHECKLIST.md'), 'utf8');
+const sourceCheck = blueChecklist.match(/^  - For issue #279,[^\r\n]*(?:\r?\n {4}[^\r\n]*)*/m)?.[0];
+assert(sourceCheck?.includes('[guardrail setup](docs/SETUP-GUARDRAILS.md#part-a-right-after-pr-27-merges-10-minutes)'),
+  'the issue #279 checklist item links to the guardrail setup');
 
 process.stdout.write('\naudited packages stay at or above their fixed versions\n');
 const lock = JSON.parse(fs.readFileSync(path.join(__dirname, 'package-lock.json'), 'utf8'));

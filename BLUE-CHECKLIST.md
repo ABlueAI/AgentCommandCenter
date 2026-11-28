@@ -61,8 +61,8 @@ push" or "one more review run", so those are not listed here.
   notifications".
 - [Step 65](#from-the-mako-11-decision-sheet-2026-11-16): Dependabot alerts and security updates on
   (3 minutes; your words, 2026-11-18: "now").
-- [Step 78](#from-s38-the-full-security-check): two security decisions from S38, with the private
-  report open (10 minutes).
+- [Step 78](#from-s38-the-full-security-check): security decisions and required check source
+  confirmation from S38, with the private report open (about 12 minutes).
 - [Step 61](#from-the-mako-11-decision-sheet-2026-11-16): tell a local agent on your PC "do step 61"
   (2 minutes; you approved the delete on 2026-11-16).
 
@@ -1599,14 +1599,20 @@ Steps 78 and 79 come from PR #254 (S38). Step number 77 belongs to an open PR (#
 behind both steps are in the private report from the S38 session, not in this public file
 (docs/DECISIONS.md 2026-11-21, item 7).
 
-- [ ] **78. Two security decisions from S38 (PR #254).** **About 10 minutes**, after merging PR #254,
-  with the S38 private report open.
+- [ ] **78. Security decisions and required check sources from S38 (PR #254).** **About 12 minutes**,
+  after merging PR #254, with the S38 private report open.
   - Issue #265: decide whether to make the repository-settings change the private report describes
     (only you change repository settings), or tell an agent another way to close it.
   - Issue #270's last item: decide whether two kinds of material named in the private report stay in
     this public repository.
-  - *Done when:* you've told any agent your answer on each; it records them in docs/DECISIONS.md and
-    ticks this with the date and your words.
+  - For issue #279, allow about 2 minutes at your next merge sitting to confirm both required
+    Windows checks use **GitHub Actions** as their expected source in `protect-main`. Use the
+    [guardrail setup](docs/SETUP-GUARDRAILS.md#part-a-right-after-pr-27-merges-10-minutes)
+    to update either source if needed. Reopen the ruleset to verify both saved values and confirm
+    both Actions results are required on the next PR.
+  - *Done when:* you've told any agent your answers for #265 and #270 and confirmed the check
+    sources for #279. The agent records the decisions in docs/DECISIONS.md and ticks this with the
+    date and your confirmation.
 - [ ] **79. S38's checks on your PC (PR #254).** **About 10 minutes**, on the next Tuesday or Friday
   PC-check evening after merging PR #254, with the S38 private report open. Some findings rest on
   Windows behaviour a cloud session can't run; the report lists each one with a check of under 2

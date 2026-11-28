@@ -22,10 +22,13 @@ personal approval.
 3. **Protect main.** Settings > Rules > Rulesets > New ruleset > New branch ruleset:
    - Name `protect-main`, Enforcement **Active**, **Bypass list: leave empty** (not even admins).
    - Target branches: **Include default branch**.
-   - Check: **Restrict deletions**; **Require a pull request before merging** (required approvals
-     **0** for now; Part B raises it); **Require status checks to pass**, adding **App tests
-     (Windows)** and **PowerShell tests (Windows)**; **Block force pushes**.
-   - Save.
+   - Enable **Restrict deletions**, **Require a pull request before merging** (required approvals
+     **0** for now, raised in Part B) and **Block force pushes**.
+   - Enable **Require status checks to pass** and choose the expected source for each check.
+     - **App tests (Windows)** — **GitHub Actions**.
+     - **PowerShell tests (Windows)** — **GitHub Actions**.
+   - Save, reopen `protect-main` and confirm both checks list **GitHub Actions** as the expected
+     source. On the next PR, confirm GitHub marks both Actions results as required.
 4. **Phone alerts.** GitHub mobile app > Settings > Notifications: on for **Pull requests** and
    **Reviews requested**. Optional: a filter for issues labelled `security-alert`.
 5. **Codex reviews (optional since 2026-10-19).** The required independent review is now the
