@@ -154,6 +154,63 @@ Describe 'feed-gemini.ps1 -MaxDurationSeconds ceiling is 14400s / four hours (P1
     }
 }
 
+function Invoke-FeedGeminiTestChild {
+    param([string]$Arguments, [int]$TimeoutMilliseconds = 30000)
+
+    # ProcessStartInfo inherits the environment block directly. Start-Process on Windows
+    # PowerShell 5.1 can fail to launch if that block contains both Path and PATH.
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = (Get-Process -Id $PID).Path
+    $psi.Arguments = "-NoProfile -NoLogo -NonInteractive -ExecutionPolicy Bypass $Arguments"
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardError = $true
+    $psi.RedirectStandardOutput = $true
+    $p = New-Object System.Diagnostics.Process
+    try {
+        $p.StartInfo = $psi
+        [void]$p.Start()
+        $timer = [System.Diagnostics.Stopwatch]::StartNew()
+        $stdout = $p.StandardOutput.ReadToEndAsync()
+        $stderr = $p.StandardError.ReadToEndAsync()
+        if (-not $p.WaitForExit($TimeoutMilliseconds)) {
+            if (-not $p.HasExited) {
+                $p.Kill()
+                if (-not $p.WaitForExit(5000)) {
+                    throw "PowerShell test child timed out after $TimeoutMilliseconds ms and did not exit after termination."
+                }
+            }
+            throw "PowerShell test child timed out after $TimeoutMilliseconds ms."
+        }
+
+        # Stream handles can outlive the process, so capture shares its deadline.
+        $remaining = [int][Math]::Max(0, $TimeoutMilliseconds - $timer.ElapsedMilliseconds)
+        if (-not [System.Threading.Tasks.Task]::WaitAll(@($stdout, $stderr), $remaining)) {
+            throw "PowerShell test child output did not close within $TimeoutMilliseconds ms."
+        }
+        [pscustomobject]@{
+            ExitCode = $p.ExitCode
+            Stdout = $stdout.Result
+            Stderr = $stderr.Result
+        }
+    }
+    finally { $p.Dispose() }
+}
+
+Describe 'feed-gemini.ps1 child process capture' {
+    It 'drains both pipes while the child is still writing' {
+        $command = "[Console]::Out.Write('o' * 262144); [Console]::Error.Write('e' * 262144); exit 7"
+        $run = Invoke-FeedGeminiTestChild -Arguments "-Command `"$command`""
+        $run.Stdout.Length | Should Be 262144
+        $run.Stderr.Length | Should Be 262144
+        $run.ExitCode | Should Be 7
+    }
+
+    It 'reports a timeout when a child does not exit' {
+        { Invoke-FeedGeminiTestChild -Arguments '-Command "Start-Sleep -Seconds 5"' -TimeoutMilliseconds 200 } |
+            Should Throw 'PowerShell test child timed out'
+    }
+}
+
 Describe 'feed-gemini.ps1 offset refusal invariant' {
 
     # 1a â€” a lone offset is refused (never "ignored, whole video analyzed").
@@ -186,31 +243,10 @@ Describe 'feed-gemini.ps1 offset refusal invariant' {
     }
 
     # Non-zero exit code: the throw must surface as a real refusal when run as a script file.
-    # Start-Process -Wait -PassThru gives a deterministic .ExitCode; capturing $LASTEXITCODE from a
-    # nested `powershell ... 2>$null` is racy in PS 5.1 (the child's stderr can surface in the parent
-    # as a NativeCommandError before the exit code is read).
-    It 'exits non-zero (not 0) when a lone offset is passed' {
-        $p = $null
-        try {
-            # Start-Process copies the inherited environment through a case-insensitive
-            # dictionary in Windows PowerShell 5.1. A host with both Path and PATH then
-            # fails before it launches the child. ProcessStartInfo inherits the real
-            # environment block directly, so this remains a genuine process-boundary test.
-            $psi = New-Object System.Diagnostics.ProcessStartInfo
-            $psi.FileName = 'powershell.exe'
-            $psi.Arguments = "-NoProfile -NoLogo -ExecutionPolicy Bypass -File `"$feedGemini`" -Url `"$YT`" -VideoScout -StartOffset 10"
-            $psi.UseShellExecute = $false
-            $psi.RedirectStandardError = $true
-            $psi.RedirectStandardOutput = $true
-            $p = New-Object System.Diagnostics.Process
-            $p.StartInfo = $psi
-            [void]$p.Start()
-            $p.WaitForExit()
-            [void]$p.StandardOutput.ReadToEnd()
-            [void]$p.StandardError.ReadToEnd()
-            $p.ExitCode | Should Not Be 0
-        }
-        finally { if ($null -ne $p) { $p.Dispose() } }
+    It 'exits non-zero with the offset refusal when a lone offset is passed' {
+        $run = Invoke-FeedGeminiTestChild -Arguments "-File `"$feedGemini`" -Url `"$YT`" -VideoScout -StartOffset 10"
+        $run.ExitCode | Should Not Be 0
+        $run.Stderr | Should Match 'Both -StartOffset and -EndOffset are required'
     }
 }
 
