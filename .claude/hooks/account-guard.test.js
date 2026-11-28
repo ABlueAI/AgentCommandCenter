@@ -217,7 +217,8 @@ for (const cmd of NOT_GUARDED) {
 
 // ---------------------------------------------------------------------------------------------
 process.stdout.write('\ndecide(): the three login cases\n');
-const bash = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } });
+// Claude Code's hook input carries the session's cwd; the git-alias lookup reads it (issue #337).
+const bash = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command }, cwd: REPO_ROOT });
 
 const withPushSources = {
   git: (args) => {
@@ -1506,6 +1507,133 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
 try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* temp cleanup is best effort */ }
 
 // ---------------------------------------------------------------------------------------------
+process.stdout.write('\ngit aliases (issue #337)\n');
+{
+  const find = (c, mode = 'bash') => guard.findGuardedCommand(c, 0, mode);
+  const NOTE = guard.GIT_ALIAS_NOTE;
+  const noted = (hit) => typeof hit === 'string' && hit.startsWith('git push' + NOTE + ': ');
+  // An alias defined on the command itself.
+  assert(find('git -c alias.p=push p origin x') === 'git push', '`-c alias.NAME=push` then `git NAME` is a push');
+  assert(find('git -c alias.P=push p') === 'git push', 'alias names are case-insensitive, as in git');
+  assert(find("git -c 'alias.sync=push --force-with-lease' sync") === 'git push', 'an alias whose value is push with options');
+  assert(find('git -c alias.a=b -c alias.b=push a') === 'git push', 'an alias of an alias');
+  assert(find("git -c 'alias.p=!git push' p") === 'git push', 'a shell alias (`!...`) is checked as Bash');
+  assert(find("git -c 'alias.m=!gh pr merge 5' m") === 'gh pr merge', 'a shell alias that merges is a merge (blocked under any login)');
+  assert(find('git -c alias.p=status p') === null, 'an alias to another command is not a push');
+  assert(find('git -c alias.status=push status') === null, 'git ignores an alias that hides its own command, and so does the guard');
+  assert(noted(find('git -c alias.a=a a')), 'an alias loop gets the login check (fail-closed)');
+  assert(noted(find('git --config-env=alias.p=VAR p')) && noted(find('git --config-env alias.p=VAR p')), '`--config-env alias.NAME=VAR` (both spellings): value unknown, login check');
+  assert(find('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.p GIT_CONFIG_VALUE_0=push git p') === 'git push', 'GIT_CONFIG_KEY_n/VALUE_n on the command');
+  assert(noted(find("GIT_CONFIG_PARAMETERS=\"'alias.p'='push'\" git p")), 'GIT_CONFIG_PARAMETERS naming the alias: login check');
+  assert(noted(find('git config alias.p push && git p')), 'an alias set by `git config` in the same call gets the login check');
+  assert(noted(find('git config --global alias.p push; git p origin')), '... with --global');
+  assert(find('bash -c "git -c alias.p=push p"') === 'git push', 'inside `bash -c`');
+  assert(find('git -c alias.p=push p', 'ps') === 'git push', 'the PowerShell tool');
+  // Review run 1 fixes.
+  assert(find("git -c 'alias.g=!git' g push origin x") === 'git push', "a shell alias gets the call's remaining words, as git passes them");
+  assert(find("git -c 'alias.g=!git' g status") === null, '... and they are only words: `git status` through it is not a push');
+  assert(noted(find(`git -c 'alias.run=!f() { git "$@"; }; f' run push`)), 'a shell alias that reads its arguments, given some: login check');
+  assert(find(`git -c 'alias.run=!f() { git "$@"; }; f' run`) === null, '... and given none, its own text is checked');
+  assert(noted(find(`git -c "alias.g=!sh -c 'git $0'" g push`)), 'a nested `sh -c` reading $0, given arguments: login check');
+  assert(noted(find("git -c 'alias.p=!git q' -c alias.q=push p")), "aliases the outer call defines stay known inside a shell alias");
+  assert(find("git -c 'alias.p=push --push-option=$(x) origin HEAD' p") === 'git push', 'a plain alias value is split like git does: `$(...)` is just text');
+  assert(find(`git -c 'alias.p=push "a b"' p`) === 'git push', 'quoted words in a plain alias value');
+  assert(find(`git -c 'alias.p=push "a' p`) === null, 'git refuses an alias value with an unclosed quote');
+  assert(noted(find('export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.p GIT_CONFIG_VALUE_0=push; git p')), 'an alias exported earlier in the same call (Bash): login check');
+  assert(noted(find("$env:GIT_CONFIG_COUNT=1; $env:GIT_CONFIG_KEY_0='alias.p'; $env:GIT_CONFIG_VALUE_0='push'; git p", 'ps')), '... and through $env: (PowerShell)');
+  assert(find('git -c alias.subtree=push subtree') === 'git push', "a script's name (git subtree) is not a built-in, so the alias is read");
+  assert(find('git lfs pull') === null && find('git p') === null, 'without a lookup, an unknown subcommand is not a push');
+  assert(guard.GIT_COMMANDS.has('push') && guard.GIT_COMMANDS.has('status') && !guard.GIT_COMMANDS.has('lfs'), "the list of git's own commands");
+
+  // Configured aliases, through decide()'s lookup.
+  const ablue = () => ({ login: 'ABlueAI' });
+  const lookups = [];
+  const aliases = (map) => ({ ...withPushSources, gitAlias: (name, opts, cwd) => { lookups.push({ name, opts, cwd }); return name in map ? { value: map[name] } : { none: true }; } });
+  const failing = (error) => ({ ...withPushSources, gitAlias: () => ({ error }) });
+  assert(guard.decide(bash('git p origin x'), ablue, aliases({ p: 'push' })).exitCode === 2, 'a configured `alias.p = push`: `git p` is blocked under ABlueAI');
+  assert(guard.decide(bash('git pf'), ablue, aliases({ pf: '!git push --force-with-lease' })).exitCode === 2, 'a configured shell alias that pushes is blocked under ABlueAI');
+  assert(guard.decide(bash('git p'), () => ({ login: 'ABlueAgent' }), aliases({ p: 'push' })).exitCode === 0, 'the same alias is allowed under an agent login');
+  lookups.length = 0;
+  assert(guard.decide(bash('git lfs pull'), ablue, aliases({})).exitCode === 0 && lookups.length === 1 && lookups[0].name === 'lfs',
+    'an unknown subcommand that is no alias: allowed, after one lookup');
+  lookups.length = 0;
+  assert(guard.decide(bash('git status && git log'), ablue, aliases({})).exitCode === 0 && lookups.length === 0, "git's own commands are never looked up");
+  lookups.length = 0;
+  guard.decide({ ...bash('git -C ../wt -c x=y p'), cwd: REPO_ROOT }, ablue, aliases({}));
+  assert(lookups.length === 1 && lookups[0].cwd === REPO_ROOT && lookups[0].opts.includes('-C'), "the lookup gets the hook input's cwd and git's options");
+  const v = guard.decide(bash('git p'), ablue, failing('ETIMEDOUT'));
+  assert(v.exitCode === 2 && v.stderr.includes(NOTE + ': ETIMEDOUT)'), 'a lookup that fails gets the login check, with its reason');
+  lookups.length = 0;
+  const noCwd = guard.decide({ ...bash('git p'), cwd: 'rel/dir' }, ablue, aliases({}));
+  assert(lookups.length === 0 && noCwd.exitCode === 2 && noCwd.stderr.includes('no usable cwd'), 'a hook input without a usable cwd: no lookup, login check, with the reason');
+  const missingCwd = guard.decide({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git p' } }, ablue, aliases({}));
+  assert(missingCwd.exitCode === 2, '... and with no cwd at all');
+  lookups.length = 0;
+  const lfs = guard.decide(bash('git lfs install && git lfs fetch && git lfs checkout && git lfs prune && git lfs ls-files'), ablue, aliases({}));
+  assert(lfs.exitCode === 0 && lookups.length === 1, 'the same name is looked up once per call, so repeats never use up the budget');
+  lookups.length = 0;
+  const many = guard.decide(bash('git a; git b; git c; git d; git e'), ablue, aliases({}));
+  assert(lookups.length === 4 && many.exitCode === 2 && many.stderr.includes('more than 4 aliases'), 'at most 4 lookups per call; past that, the login check, with the reason');
+  assert(guard.decide(bash('git p'), () => ({ login: 'ABlueAgent' }), aliases({ p: '!gh pr merge 1' })).exitCode === 2,
+    'a configured shell alias that merges is blocked under any login');
+
+  // On main's push checks (#324): a push through an alias gets them, and an unreadable alias is refused.
+  const agentLogin = () => ({ login: 'ABlueAgent' });
+  {
+    const r = guard.decide(bash('git -c alias.p=push p origin HEAD:main'), agentLogin, withPushSources);
+    assert(r.exitCode === 2 && /git push refused/.test(r.stderr || ''), 'a push to main through an alias is refused under an agent login (push checks)');
+    const f = guard.decide(bash('git p origin x'), agentLogin, aliases({ p: 'push --force' }));
+    assert(f.exitCode === 2 && /git push refused/.test(f.stderr || ''), 'a configured alias that force-pushes is refused under an agent login');
+    const u = guard.decide(bash('git p'), agentLogin, failing('ETIMEDOUT'));
+    assert(u.exitCode === 2 && /git alias whose value could not be read \(ETIMEDOUT\)/.test(u.stderr || ''), 'an alias whose value could not be read is refused under an agent login, with the reason');
+    const a = guard.decide(bash(`git -c 'alias.run=!f() { git "$@"; }; f' run push`), agentLogin, withPushSources);
+    assert(a.exitCode === 2 && /reads its arguments/.test(a.stderr || ''), 'a shell alias that reads its arguments, given some, is refused under an agent login');
+    assert(guard.decide(bash('git lfs pull'), agentLogin, aliases({})).exitCode === 0, 'an unknown subcommand that is no alias is allowed under an agent login');
+    // Review run 4: a shell alias's push loses the outer call's -C and -c options, so it is refused.
+    for (const cmd of [
+      `git -C ${REPO_ROOT} -c 'alias.p=!git push origin x' p`,
+      "git -c remote.origin.pushurl=https://example.invalid/o/r.git -c 'alias.p=!git push origin x' p",
+      "git --git-dir=.git -c 'alias.p=!git push origin x' p",
+    ]) {
+      const r = guard.decide(bash(cmd), agentLogin, withPushSources);
+      assert(r.exitCode === 2 && /git options that change where it pushes/.test(r.stderr || ''), `refuse a shell alias's push run with git options: ${cmd}`);
+    }
+    assert(guard.decide(bash("git -c 'alias.p=!git push origin x' p"), agentLogin, withPushSources).exitCode === 0,
+      'a shell alias defined by `-c alias.*` alone keeps its push checks and is allowed when they pass');
+    assert(guard.decide(bash("git -C . -c 'alias.s=!git status' s"), agentLogin, withPushSources).exitCode === 0,
+      'a shell alias with git options that runs no push is allowed');
+    {
+      const r = guard.decide(bash('git -C . p origin x'), agentLogin, aliases({ p: 'push' }));
+      assert(r.exitCode === 0, 'a plain alias keeps -C on the expanded push, so it is checked, not refused');
+    }
+    let budget = 0;
+    const slow = guard.decide(bash('git p'), agentLogin, { ...withPushSources, gitAlias: () => { budget++; return { none: true }; } });
+    assert(slow.exitCode === 0 && budget === 1, 'the injected lookup runs once for one alias');
+  }
+
+  // The real lookup, against a throwaway repository.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-alias-'));
+  const gitRun = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+  if (gitRun(['init', '-q']).status === 0 && gitRun(['config', 'alias.pp', 'push origin HEAD']).status === 0) {
+    const r = guard.readGitAlias('pp', [], dir);
+    assert(r.value === 'push origin HEAD', 'readGitAlias reads a configured alias');
+    assert(guard.readGitAlias('nosuchalias', [], dir).none === true, 'readGitAlias: an unset alias is { none: true }');
+    const e2e = guard.decide({ ...bash('git pp'), cwd: dir }, ablue);
+    assert(e2e.exitCode === 2 && !e2e.stderr.includes(NOTE), 'end to end through the real lookup: blocked under ABlueAI, the alias read (no note)');
+    assert(guard.readGitAlias('pp', ['-C', dir], os.tmpdir()).value === 'push origin HEAD', 'readGitAlias passes -C to git');
+    assert(guard.readGitAlias('pp', ['--git-dir=' + path.join(dir, '.git')], os.tmpdir()).value === 'push origin HEAD', 'readGitAlias passes --git-dir= to git');
+    for (const unc of [['-C', '\\\\no-such-host\\share'], ['--git-dir=//no-such-host/x'], ['--work-tree', '\\\\h\\s']]) {
+      const r2 = guard.readGitAlias('pp', unc, dir);
+      assert(r2.error === 'the command names a network path', `readGitAlias never opens a network path (${unc.join(' ')})`);
+    }
+    const noGit = guard.readGitAlias('pp', [], dir, undefined, { PATH: path.join(dir, 'no-such-bin') });
+    assert(typeof noGit.error === 'string' && /not installed|not on PATH/.test(noGit.error), 'readGitAlias with no git on PATH: an error, not "no alias"');
+  } else {
+    assert(false, 'git is available to set up the alias test repository');
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 process.stdout.write('\n.claude/settings.json\n');
 const settings = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, '.claude', 'settings.json'), 'utf8'));
 // Every Bash deny rule (push, merge and review) has a PowerShell counterpart (issue #219).
