@@ -79,11 +79,7 @@ function assert(condition, label) {
     'a SLICED app request still carries the explicit Lite choice (never silently upgraded to Pro)');
 }
 
-// --- V4Q CORRECTION: an invalid videoModel REFUSES the launch; an invalid mediaResolution does not
-// An out-of-allowlist model used to be dropped so the script default would apply. That stopped
-// being safe when feed-gemini.ps1 gained omitted-model resolution: a dropped -Model on a sliced run
-// now resolves to gemini-2.5-pro, so "drop and continue" would spend real money on a model the user
-// never selected. mediaResolution keeps the drop behavior -- its fallback is genuinely inert.
+// Explicit invalid Video Scout model and resolution values refuse launch.
 {
   const { args, notes, error } = buildVideoScoutArgs({ videoModel: 'gemini-3-ultra-secret', mediaResolution: 'ULTRA' });
   assert(typeof error === 'string' && error.length > 0, 'an invalid videoModel sets a launch-refusing error');
@@ -96,10 +92,10 @@ function assert(condition, label) {
 {
   // mediaResolution is unchanged: dropped with a note, launch still proceeds.
   const { args, notes, error } = buildVideoScoutArgs({ videoModel: 'gemini-2.5-pro', mediaResolution: 'ULTRA' });
-  assert(error === null || error === undefined, 'an invalid mediaResolution alone does NOT refuse the launch');
+  assert(typeof error === 'string' && error.includes('resolution'), 'an invalid mediaResolution refuses the launch');
   assert(!args.includes('-MediaResolution'), 'rejects a mediaResolution outside VALID_MEDIA_RESOLUTIONS');
-  assert(args[args.indexOf('-Model') + 1] === 'gemini-2.5-pro', 'the valid model still serializes');
-  assert(notes.some(n => /mediaResolution=.*REJECTED/.test(n)), 'notes flag the rejected mediaResolution explicitly');
+  assert(args.length === 0, 'a refused request returns no arguments');
+  assert(notes.some(n => /mediaResolution.*REJECTED/.test(n)), 'notes flag the rejected mediaResolution explicitly');
 }
 {
   // The exact escalation the correction closes: an invalid model on a SLICED request must never be

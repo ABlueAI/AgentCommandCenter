@@ -22,7 +22,7 @@ const { createClaudeVideoScoutIpc } = require('./claude-video-scout-ipc');
 const { generateRunId, createRunIdRegistry } = require('./video-scout-run-id');
 // Untrusted IPC `task` names flow into a filesystem path and a git branch name; validate them here
 // (the enforcement boundary) before any fs/git/spawn call. See app/task-name.js / finding #4.
-const { validateTask } = require('./task-name');
+const { validBranchName, validateTask } = require('./task-name');
 const { readBuildInfo } = require('./build-info');
 // Navigation-lockdown decisions (deny window.open / off-app navigation) and the shell-free launcher
 // arg builders. Both dependency-free + unit-tested (nav-guard.test.js / launchers.test.js).
@@ -53,7 +53,7 @@ const { classifyPtyLaunch, KIND: LAUNCH_KIND } = require('./pty-launch-classify'
 // S10: the authority level Blue picks maps to a main-owned Claude permission mode (authority-level.js).
 const { applyAuthority, authorityArgs } = require('./authority-level');
 const { channelFor } = require('./main-log-level');
-const { createRoleDefinitionResolver } = require('./role-definition-resolver');
+const { createRoleDefinitionResolver, ROLE_ARG_ENV, ROLE_SETTINGS_ENV } = require('./role-definition-resolver');
 const { assertFencedRoleDefinition, FORBIDDEN_TOOLS, controlledWebFetchLaunch } = require('./role-fence-policy');
 const { createPtyStartAuthority } = require('./pty-start-authority');
 // PRODUCTION PANE STATUS — docs/OSS-PROCUREMENT-pane-status.md,
@@ -287,7 +287,7 @@ const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 //   role set    -> `claude --agent <role> [--model x] [--effort y] [--permission-mode m]` (roles are a Claude feature)
 //   cli only    -> bare CLI (claude/codex/gemini); `claude` may carry `--permission-mode m`
 //   neither     -> undefined => plain PowerShell shell
-function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch, webFetch, sessionId, resume) {
+function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch, webFetch, sessionId, resume, definition) {
   // S08: `sessionId` is MAIN-MINTED (crypto.randomUUID in pty-start) and re-checked as a UUID before
   // it is spliced in, so only hex digits and hyphens can reach the -Command string. It goes last,
   // after any opening prompt, which leaves every earlier argument in place.
@@ -335,19 +335,16 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     // (authority-level.js). Never set for a fenced role; permissionModeArg re-checks both. S31: with
     // the level's explicit tool lists first, because the env scrub forces the mode to default.
     cmd += authorityArgs(launch);
-    // Optional opening prompt (e.g. the reviewer's "review this diff"). Strip shell-significant
-    // characters so it stays a single safe quoted argument inside the powershell -Command string.
-    // A FENCED command never carries one: the classifier already refuses a supplied fenced prompt
-    // (it could be parsed as a CLI option), and this second check keeps that true here as well.
-    if (!(launch && launch.fenced === true) && initialPrompt && typeof initialPrompt === 'string') {
-      const clean = initialPrompt.replace(/["`$\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
-      if (clean) cmd += ' "' + clean + '"';
+    if (initialPrompt) cmd += ' "' + initialPrompt + '"';
+    if (definition) {
+      cmd += ' --agents $env:' + ROLE_ARG_ENV;
+      if (definition.settingsArg) cmd += ' --settings $env:' + ROLE_SETTINGS_ENV;
     }
     return cmd + sessionArg;
   }
   // S10: a bare `claude` pane carries the authority level's permission mode too; S08's session ID goes last.
   if (launch && launch.kind === 'cli' && launch.cli === 'claude') return AGENT_CMD.claude + authorityArgs(launch) + sessionArg;
-  const bare = AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
+  const bare = AGENT_CMD[launch ? launch.cli : (cli || agent)]; // undefined when unknown/falsy -> plain shell
   return bare === AGENT_CMD.claude ? bare + sessionArg : bare;
 }
 
@@ -367,16 +364,17 @@ const VIDEO_HOSTS = new Set([                 // (?) hosts the video-scout is al
 function validateVideoUrl(url) {
   if (typeof url !== 'string' || url.length > 2048) return null;
   // Cheap belt-and-suspenders: no quotes/$/backtick even though we no longer shell-splice it.
-  if (!/^https?:\/\/[^\s"$\x60]+$/.test(url)) return null;
+  if (!/^https?:\/\/[^\s"\\$\x00-\x1f\x60\x7f]+$/.test(url)) return null;
   let u;
   try { u = new URL(url); } catch { return null; }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;  // reject file:, etc.
+  if (u.username || u.password || u.port || u.href.length > 2048) return null;
   const host = u.hostname.toLowerCase();
   // Reject obvious internal targets (localhost / private + link-local IPs / GCP metadata).
   if (/^(localhost|127\.|0\.|10\.|192\.168\.|169\.254\.|::1|metadata\.google\.internal)/.test(host)) return null;
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return null;
   if (!VIDEO_HOSTS.has(host)) return null;     // allowlist: only known video platforms
-  return url;
+  return u.href;
 }
 
 // ---- tiny settings store (userData/settings.json) ---------------------------
@@ -1118,17 +1116,6 @@ function tlog(msg, kind = 'routine') {
 // Call at the start of each createAgent attempt to reset the clock.
 function tlogReset() { _t0 = Date.now(); tlog('--- new createAgent sequence ---'); }
 
-// Resolve paths for the launcher's working-directory checks. The tool hook independently
-// validates file paths at the point of use.
-function realOrNearest(p) {
-  try { return fs.realpathSync.native(p); }
-  catch {
-    const parent = path.dirname(p);
-    if (parent === p) return p; // filesystem root — nothing left to resolve
-    return path.join(realOrNearest(parent), path.basename(p));
-  }
-}
-
 // Turn a git remote into a browsable https URL.
 function remoteToHttps(remote) {
   if (!remote) return '';
@@ -1245,37 +1232,69 @@ handleTrustedIpc('list-worktrees', async (repo) => {
 handleTrustedIpc('repo-github-url', async (repo) => remoteToHttps(await git(['remote', 'get-url', 'origin'], repo)));
 
 // ---- IPC: agents ------------------------------------------------------------
-// Create a worktree (via the repo's own new-agent.ps1) and launch the chosen agent in a WT tab.
-handleTrustedIpc('new-agent', async ({ repo, task }) => {
-  // Refuse a malformed task BEFORE building any path or spawning powershell (finding #4). A
-  // bypassed renderer can send anything; never silently sanitize — surface the reason and stop.
-  const taskCheck = validateTask(task);
-  if (!taskCheck.ok) {
-    tlog(`new-agent: REFUSED invalid task: ${taskCheck.error}`);
-    if (win && !win.isDestroyed()) win.webContents.send('main-error', `New agent refused: ${taskCheck.error}`);
-    return { ok: false, error: taskCheck.error };
-  }
-  tlog(`new-agent: START task="${task}"`);
+// `detail` is a bounded diagnostic for the Logs tab only (an error code or one cleaned line of a
+// script's error output); the renderer still receives only the reason constant.
+function refuseLaunch(launcher, reason, detail) {
+  const line = `${launcher} refused: ${reason}${detail ? ` (${detail})` : ''}`;
+  tlog(line);
+  sendMainLog(line, 'error');
+  return { ok: false, error: reason };
+}
+
+// One line of external error text, safe for the Logs tab: first non-empty line, terminal colour
+// sequences and control characters removed, at most 200 characters.
+function boundedDetail(text) {
+  const line = String(text || '').split(/\r?\n/)
+    .map((l) => l.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim()).find(Boolean);
+  return line ? line.slice(0, 200) : '';
+}
+
+function isLaunchRequest(req, fields) {
+  return req !== null && typeof req === 'object' && !Array.isArray(req)
+    && Object.keys(req).every((key) => fields.includes(key));
+}
+
+// Create a worktree with the app's own script and verify the result against git.
+ipcMain.handle('new-agent', async (e, req) => {
+  const refuse = (reason, detail) => refuseLaunch('New agent', reason, detail);
+  const sender = launcherGate.assess(e);
+  if (!sender.ok) return refuse(sender.reason);
+  if (!isLaunchRequest(req, ['repo', 'task'])) return refuse('invalid-request');
+  const taskCheck = validateTask(req.task);
+  if (!taskCheck.ok) return refuse(taskCheck.error);
+  const repo = launcherAuthorizer.authorize(req.repo, { repoRootsOnly: true });
+  if (!repo.ok) return refuse(repo.reason);
+
+  const task = taskCheck.task;
   const script = path.join(SCRIPTS_DIR, 'new-agent.ps1');
-  // Worktree path follows the <repo>-<task> sibling convention the scripts use.
-  const wt = path.join(path.dirname(repo), `${path.basename(repo)}-${task}`);
+  const worktree = path.join(path.dirname(repo.dir), `${path.basename(repo.dir)}-${task}`);
   const branch = `agent/${task}`;
-  tlog('new-agent: execFile powershell new-agent.ps1 START');
-  const out = await new Promise((resolve) => {
-    execFile('powershell',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task],
-      { cwd: repo }, (err, stdout, stderr) => resolve({ err, stdout, stderr }));
+  const created = await new Promise((resolve) => {
+    execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task],
+      { cwd: repo.dir }, (error, _stdout, stderr) => resolve(error
+        ? { ok: false, detail: boundedDetail(stderr) || boundedDetail(error.message) || 'no error output' }
+        : { ok: true }));
   });
-  tlog('new-agent: execFile powershell new-agent.ps1 END');
-  // Don't claim success unless the folder really exists — otherwise the renderer would try
-  // to launch a PTY into a missing dir (Windows error 267) and crash the app.
-  if (!fs.existsSync(wt)) {
-    const error = ((out.stderr || (out.err && out.err.message) || 'worktree was not created') + '').trim();
-    tlog(`new-agent: FAIL worktree missing: ${error}`);
-    return { ok: false, error, worktree: wt, branch };
+  // The script's own error line (for example a branch that already exists) goes to the Logs tab.
+  if (!created.ok) return refuse('worktree-creation-failed', created.detail);
+  let tree;
+  try { tree = fs.realpathSync.native(worktree); }
+  catch (error) {
+    return error && error.code === 'ENOENT'
+      ? refuse('worktree-folder-missing')
+      : refuse('worktree-verification-failed', (error && error.code) || 'error');
   }
-  tlog('new-agent: END ok');
-  return { ok: true, worktree: wt, branch };
+  let entries;
+  try { entries = listGitWorktrees(repo.dir); }
+  catch (error) { return refuse('worktree-enumeration-failed', (error && error.code) || 'git-failed'); }
+  const registered = entries.find((entry) =>
+    entry.branch === `refs/heads/${branch}` && equalLaunchPaths(entry.path, tree));
+  try {
+    if (registered && fs.statSync(tree).isDirectory()) return { ok: true, worktree: tree, branch };
+  } catch (error) {
+    return refuse('worktree-verification-failed', (error && error.code) || 'error');
+  }
+  return refuse('worktree-not-registered');
 });
 
 // Tear down an agent's worktree (branch is preserved by the script).
@@ -1316,11 +1335,19 @@ handleTrustedIpc('remove-agent', async ({ repo, task }) => {
 // Create a dedicated, fenced outputs sandbox for a research role (web-scout/operator) so it
 // runs OUTSIDE any repo. The role launches with cwd = this dir, and its PreToolUse write-fence
 // confines writes to here — it cannot touch a repo even though it has the Write tool.
-handleTrustedIpc('ensure-output-dir', async ({ role }) => createOutputSandbox(role));
+ipcMain.handle('ensure-output-dir', async (e, req) => {
+  const sender = launcherGate.assess(e);
+  if (!sender.ok) return refuseLaunch('Output sandbox', sender.reason);
+  if (!isLaunchRequest(req, ['role']) || !FENCED_ROLES.has(req.role) || req.role === pageReaderMod.ROLE) {
+    return refuseLaunch('Output sandbox', 'invalid-sandbox-role');
+  }
+  const sandbox = await createOutputSandbox(req.role);
+  if (sandbox.ok) preparedOutputDirs.set(sandbox.dir, req.role);
+  return sandbox;
+});
 
 async function createOutputSandbox(role) {
   tlog(`ensure-output-dir: START role="${role}"`);
-  const safeRole = String(role || 'output').replace(/[^a-z0-9-]/gi, '') || 'output';
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   // WO-7 UNIQUENESS. The stamp has SECOND precision, so concurrent launches of the SAME role in the
   // same second previously produced the SAME directory: `mkdirSync(..., {recursive:true})` succeeds
@@ -1328,22 +1355,22 @@ async function createOutputSandbox(role) {
   // Two fenced agents sharing a sandbox is a fence-isolation defect, not a naming nuisance.
   // `mkdtempSync` creates the directory ATOMICALLY AND EXCLUSIVELY — a random suffix followed by a
   // recursive mkdir would leave the same hole open under a different name.
-  const outputsRoot = path.join(loadSettings().projectsRoot, '.command-center', 'outputs');
   let dir;
   try {
-    fs.mkdirSync(outputsRoot, { recursive: true });   // the PARENT only; never the sandbox itself
-    dir = fs.mkdtempSync(path.join(outputsRoot, `${safeRole}-${stamp}-`));
+    const outputs = outputSandboxRoot(loadSettings().projectsRoot, true);
+    dir = fs.mkdtempSync(path.join(outputs, `${role}-${stamp}-`));
   }
-  catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+  catch (error) {
+    // A control or outputs folder that is not a plain directory has its own reason; any other
+    // failure carries its error code (EACCES, ENOSPC, ...) to the Logs tab.
+    if (error && error.message === 'invalid-outputs-root') return refuseLaunch('Output sandbox', 'invalid-outputs-root');
+    return refuseLaunch('Output sandbox', 'sandbox-create-failed', (error && error.code) || 'error');
+  }
   tlog('ensure-output-dir: mkdirSync done');
 
   // Pre-trust this sandbox in ~/.claude.json so Claude Code's workspace-trust prompt never
   // fires. Trust state is keyed by exact path — there is no wildcard config — so we must
   // write the entry before the PTY spawns (Claude Code reads it at session start).
-  //
-  // BEST-EFFORT: a failure here (permissions, disk full, corrupt JSON) must NOT block the
-  // sandbox launch. The worst outcome is a one-time trust dialog in the agent pane — the
-  // outer catch swallows and continues; the return { ok: true, dir } below is unconditional.
   //
   // CONCURRENCY: Blue Helm's normal mode is parallel sandbox launches. Without serialization,
   // concurrent calls each read a stale snapshot and the last writer silently wins, dropping
@@ -1358,6 +1385,7 @@ async function createOutputSandbox(role) {
   let release;
   const prev = claudeJsonLock;
   claudeJsonLock = new Promise(res => { release = res; }); // synchronous — no interleaving
+  let tmp;
   try {
     await prev; // wait for any concurrent cycle to finish
     tlog(`ensure-output-dir: acquired .claude.json lock, reading (${fs.existsSync(claudeJsonPath) ? fs.statSync(claudeJsonPath).size + 'B' : 'missing'})`);
@@ -1365,7 +1393,9 @@ async function createOutputSandbox(role) {
     // not a snapshot taken before a sibling call's write landed.
     let claudeData = {};
     if (fs.existsSync(claudeJsonPath)) {
-      claudeData = JSON.parse(fs.readFileSync(claudeJsonPath, 'utf8'));
+      const raw = fs.readFileSync(claudeJsonPath, 'utf8');
+      try { claudeData = JSON.parse(raw); }
+      catch { throw Object.assign(new Error('trust file unparseable'), { code: 'UNPARSEABLE' }); }
     }
     if (!claudeData.projects) claudeData.projects = {};
     const projectKey = dir.replace(/\\/g, '/'); // Claude Code stores paths with forward slashes
@@ -1381,13 +1411,22 @@ async function createOutputSandbox(role) {
       hasClaudeMdExternalIncludesWarningShown: false,
       hasUnseenTeamArtifacts: false,
     };
-    const tmp = `${claudeJsonPath}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+    tmp = `${claudeJsonPath}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(claudeData, null, 2), 'utf8');
     fs.renameSync(tmp, claudeJsonPath);
     tlog('ensure-output-dir: .claude.json write+rename done');
-  } catch (e) {
-    tlog(`ensure-output-dir: .claude.json write FAILED (best-effort, launch continues): ${(e && e.message) || e}`);
-    console.warn('[ensure-output-dir] could not pre-trust sandbox in .claude.json:', (e && e.message) || e);
+  } catch (error) {
+    try {
+      if (tmp) fs.rmSync(tmp, { force: true });
+      fs.rmdirSync(dir);
+    } catch {
+      sendMainLog(`Output sandbox: could not remove incomplete launch files in ${path.basename(dir)}`, 'error');
+      tlog('Output sandbox: could not remove incomplete launch files');
+    }
+    // ~/.claude.json that is not valid JSON (Claude Code rewrites it often) is told apart from a
+    // failed read, write or rename, which carries its error code.
+    if (error && error.code === 'UNPARSEABLE') return refuseLaunch('Output sandbox', 'sandbox-trust-file-unparseable');
+    return refuseLaunch('Output sandbox', 'sandbox-trust-write-failed', (error && error.code) || 'error');
   } finally {
     release(); // always release — a throw must never deadlock the chain
   }
@@ -1420,10 +1459,12 @@ const pageReaderGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrusted
 // The folder of the last page-reader this main process prepared. MAIN-OWNED: the renderer never names a
 // folder for the report hand-off below.
 let lastPageReaderDir = null;
+const preparedOutputDirs = new Map();
 ipcMain.handle('page-reader-prepare', async (e, req) => {
   const sender = pageReaderGate.assess(e);
   if (!sender.ok) return { ok: false, error: sender.reason };
-  const checked = pageReaderMod.validatePageUrl(req && typeof req === 'object' ? req.url : undefined);
+  if (!isLaunchRequest(req, ['url'])) return refuseLaunch('Page Reader', 'invalid-request');
+  const checked = pageReaderMod.validatePageUrl(req.url);
   if (!checked.ok) {
     // Issue #162: say plainly why a local or private address is refused.
     const local = checked.reason === pageReaderMod.REASON.NOT_PUBLIC_ADDRESS || checked.reason === pageReaderMod.REASON.LOCAL_NAME;
@@ -1459,6 +1500,7 @@ ipcMain.handle('page-reader-prepare', async (e, req) => {
     tlog('page-reader-prepare: request file write FAILED');
     return { ok: false, error: 'page-reader-request-write-failed' };
   }
+  preparedOutputDirs.set(sandbox.dir, pageReaderMod.ROLE);
   lastPageReaderDir = sandbox.dir;
   tlog('page-reader-prepare: ready');
   return { ok: true, dir: sandbox.dir };
@@ -1504,9 +1546,13 @@ ipcMain.handle('page-report-to-reviewer', async (e) => {
 // sense of containment is worse than none. So before launching a fenced role we verify the
 // fence is really installed AND actually gates Read (not just Write/Edit — Blue Helm
 // checklist P1), and refuse to launch if either is missing (renderer shows the reason).
-handleTrustedIpc('verify-fence', async ({ role }) => {
-  tlog(`verify-fence: START role="${role}"`);
-  if (!VALID_ROLES.has(role)) return { ok: false, error: 'unknown role' };
+ipcMain.handle('verify-fence', async (e, req) => {
+  const sender = launcherGate.assess(e);
+  if (!sender.ok) return refuseLaunch('Fence check', sender.reason);
+  if (!isLaunchRequest(req, ['role']) || !VALID_ROLES.has(req.role)) {
+    return refuseLaunch('Fence check', 'unknown-role');
+  }
+  const { role } = req;
   // NOT AN ENFORCEMENT POINT — EARLY RENDERER FEEDBACK ONLY. `pty-start` never calls this handler,
   // so a bypassed renderer can skip it entirely and still reach a spawn. Enforcement lives in the
   // main-owned authority inside `pty-start`. This exists so the operator sees a clear reason in the
@@ -1518,8 +1564,7 @@ handleTrustedIpc('verify-fence', async ({ role }) => {
   // still declared `Write`, and for a role with an EMPTY PreToolUse list whose fence command sat
   // under `PostToolUse`.
   if (!FENCED_ROLES.has(role)) return { ok: false, error: 'role-not-fenced' };
-  const outputsRoot = path.join(loadSettings().projectsRoot, '.command-center', 'outputs');
-  const check = ptyStartAuthority.authorizeFencedRole({ role, cwd: outputsRoot });
+  const check = ptyStartAuthority.authorizeRole({ role }, true);
   if (!check.ok) return { ok: false, error: check.reason };
   tlog('verify-fence: END ok');
   return { ok: true, hookPath: check.hookPath };
@@ -1528,27 +1573,27 @@ handleTrustedIpc('verify-fence', async ({ role }) => {
 // Build a review diff for a worktree (this branch vs main, including uncommitted work) and
 // write it to .agent-review.diff in that worktree so the read-only Reviewer can Read it —
 // the Reviewer has no shell, so the launcher produces the diff for it (Blue Helm spec §2).
-handleTrustedIpc('review-diff', async (request) => {
-  const { worktree, base = 'main' } = request || {};
-  if (typeof base !== 'string' || !base || base.startsWith('-') || base.includes('\0')) {
-    return { ok: false, error: 'invalid-base-ref' };
-  }
-  // Let Git check the complete ref grammar, including slash-separated names and single names.
+ipcMain.handle('review-diff', async (e, req) => {
+  const refuse = (reason) => refuseLaunch('Reviewer diff', reason);
+  const sender = launcherGate.assess(e);
+  if (!sender.ok) return refuse(sender.reason);
+  if (!isLaunchRequest(req, ['worktree', 'base'])) return refuse('invalid-request');
+  const base = req.base === undefined ? 'main' : req.base;
+  if (!validBranchName(base)) return refuse('invalid-branch-name');
+  // Git checks the complete ref grammar too (main's #316 guard), on top of the branch-name rule.
   const refError = await new Promise((resolve) => {
     execFile('git', ['check-ref-format', '--allow-onelevel', base], { windowsHide: true }, resolve);
   });
-  if (refError) {
-    return { ok: false, error: refError.code === 1 ? 'invalid-base-ref' : 'git-ref-check-failed' };
-  }
-  const authorized = launcherAuthorizer.authorize(worktree);
-  if (!authorized.ok) return { ok: false, error: authorized.reason };
-  const { error, diff } = await new Promise((resolve) => {
-    execFile('git', ['-C', authorized.dir, 'diff', '--end-of-options', base, '--'],
-      { maxBuffer: 1024 * 1024 * 32 }, (error, diff) => resolve({ error, diff }));
+  if (refError) return refuse(refError.code === 1 ? 'invalid-branch-name' : 'git-ref-check-failed');
+  const dir = launcherAuthorizer.authorize(req.worktree);
+  if (!dir.ok) return refuse(dir.reason);
+  const diff = await new Promise((resolve) => {
+    execFile('git', ['-C', dir.dir, 'diff', '--end-of-options', `refs/heads/${base}`, '--'],
+      { maxBuffer: 32 * 1024 * 1024 }, (error, stdout) => resolve(error ? null : stdout));
   });
-  if (error) return { ok: false, error: 'git-diff-failed' };
+  if (diff === null) return refuse('git-diff-failed');
   const fileName = '.agent-review.diff';
-  const file = path.join(authorized.dir, fileName);
+  const file = path.join(dir.dir, fileName);
   if (!diff.trim()) return { ok: true, empty: true, fileName };
   try { fs.writeFileSync(file, diff, 'utf8'); }
   catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
@@ -1557,32 +1602,83 @@ handleTrustedIpc('review-diff', async (request) => {
 });
 
 // ---- IPC: one-click launchers ----------------------------------------------
-// P12: the MAIN-owned set of directories the one-click launchers may open — every git repository under
-// the configured projectsRoot (the exact `list-repos` rule) plus each of that repo's live git
-// worktrees (the exact `list-worktrees` source). Re-derived from the filesystem + git on EVERY launch;
-// the renderer's string is only membership-tested against it (launcher-authz.js), never trusted. Any
-// enumeration failure degrades to a smaller/empty set, so the launch refuses rather than opens.
-function listLauncherAuthorizedDirs() {
-  const dirs = [];
-  let root;
-  try { root = loadSettings().projectsRoot; } catch { root = null; }
-  if (!root) return dirs;
-  let repos = [];
-  try {
-    repos = fs.readdirSync(root, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && fs.existsSync(path.join(root, d.name, '.git')))
-      .map((d) => path.join(root, d.name));
-  } catch { return dirs; }
-  for (const repo of repos) {
-    dirs.push(repo); // the repo root itself (also git's first worktree entry — kept if git fails)
-    let out = '';
-    try {
-      out = execFileSync('git', ['-C', repo, 'worktree', 'list', '--porcelain'],
-        { encoding: 'utf8', timeout: 10000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }) || '';
-    } catch { out = ''; }
-    for (const line of out.split('\n')) {
-      if (line.startsWith('worktree ')) { const wp = line.slice(9).trim(); if (wp) dirs.push(wp); }
+function equalLaunchPaths(a, b) {
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+function listGitWorktrees(repo) {
+  const text = execFileSync('git', ['worktree', 'list', '--porcelain', '-z'], {
+    cwd: repo, encoding: 'utf8', timeout: 10000, windowsHide: true, maxBuffer: 4 * 1024 * 1024,
+  });
+  return text.split('\0\0').flatMap((record) => {
+    const fields = record.split('\0');
+    if (!fields[0].startsWith('worktree ') || fields.some((field) => field.startsWith('prunable'))) return [];
+    return [{ path: path.normalize(fields[0].slice(9)), branch: fields.find((field) => field.startsWith('branch '))?.slice(7) }];
+  });
+}
+
+function outputSandboxRoot(root, create) {
+  const outputs = path.join(root, '.command-center', 'outputs');
+  const controlDir = path.dirname(outputs);
+  if (create) fs.mkdirSync(root, { recursive: true });
+  for (const dir of [controlDir, outputs]) {
+    if (create) {
+      try { fs.mkdirSync(dir); }
+      catch (error) { if (error.code !== 'EEXIST') throw error; }
     }
+    if (!fs.lstatSync(dir).isDirectory()) throw new Error('invalid-outputs-root');
+  }
+  return outputs;
+}
+
+function listOutputSandboxes(root, role) {
+  try {
+    const outputs = outputSandboxRoot(root, false);
+    return fs.readdirSync(outputs, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(outputs, entry.name))
+      .filter((dir) => role === 'page-report'
+        ? /^page-report-\d{4}(?:-\d{2}){2}T\d{2}(?:-\d{2}){2}(?:-[A-Za-z0-9]{6})?$/.test(path.basename(dir))
+        : preparedOutputDirs.get(dir) === role);
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
+// The scope is chosen in main. Directory membership is re-derived for each launch.
+// `candidate` is the launch folder's canonical path (launcher-authz.js). `git worktree list` runs
+// synchronously, so it is spared where it can't matter: a repository root needs no git call, and the
+// repository whose name the folder carries (new-agent's `<repo>-<task>` sibling) is listed first;
+// the other repositories are listed only if that finds nothing, so a hand-made worktree elsewhere
+// still launches.
+function listLauncherAuthorizedDirs({ repoRootsOnly = false, sandboxRole = null, includeReport = false } = {}, candidate = null) {
+  const root = loadSettings().projectsRoot;
+  if (sandboxRole) return listOutputSandboxes(root, sandboxRole);
+  const dirs = includeReport ? listOutputSandboxes(root, 'page-report') : [];
+  const repos = fs.readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(root, entry.name, '.git')))
+    .map((entry) => path.join(root, entry.name));
+  dirs.push(...repos);
+  if (repoRootsOnly) return dirs;
+  const isCandidate = (dir) => {
+    if (typeof candidate !== 'string') return false;
+    try { return equalLaunchPaths(fs.realpathSync.native(dir), candidate); } catch { return false; }
+  };
+  if (repos.some(isCandidate)) return dirs;
+  const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const folder = typeof candidate === 'string' ? fold(path.basename(candidate)) : '';
+  const likely = repos.filter((repo) => folder.startsWith(fold(path.basename(repo)) + '-'));
+  for (const repo of [...likely, ...repos.filter((r) => !likely.includes(r))]) {
+    let trees;
+    try { trees = listGitWorktrees(repo).map((entry) => entry.path); }
+    catch {
+      // Only the independently enumerated repository root is authorized; say why its worktrees refuse.
+      sendMainLog('Launcher: git worktree list failed for one repository; its worktrees cannot launch', 'error');
+      continue;
+    }
+    dirs.push(...trees);
+    if (trees.some(isCandidate)) return dirs;
   }
   return dirs;
 }
@@ -1671,11 +1767,7 @@ function probeManagedRegistryKey(key) {
 }
 
 const roleDefinitionResolver = createRoleDefinitionResolver({
-  fsx: {
-    existsSync: (p) => fs.existsSync(p),
-    readdirSync: (p, o) => fs.readdirSync(p, o),
-    readFileSync: (p, e) => fs.readFileSync(p, e),
-  },
+  fsx: fs,
   homeDir: process.env.USERPROFILE || app.getPath('home'),
   probeRegistryKey: probeManagedRegistryKey,
 });
@@ -1957,52 +2049,43 @@ ipcMain.handle('pty-start', (e, opts) => {
   // a successful spawn (below), so a refused/failed launch leaves no mapping.
   let acceptedRunId = null;
 
-  // The main process requires fenced roles to launch inside the ensure-output-dir sandbox.
-  // That working directory is the sandbox root for the tool hook's separate file checks.
-  let fencedCwd = null;
-  if (launch.fenced) {
-    // Reason CONSTANTS only. The pre-existing messages interpolated `declaredCwd`, `resolvedCwd`
-    // and `resolvedRoot` into the Logs tab and the renderer error channel; a refusal must not echo
-    // an attacker-influenced path back out. The CONTAINMENT LOGIC below is unchanged: same
-    // realpath resolution, same win32 case fold, same `startsWith(root + path.sep)` prefix rule,
-    // and still placed BEFORE the missing-cwd fallback to USERPROFILE.
-    const fenceRefuse = (reason) => {
-      const line = `Fenced launch refused [${reason}]`;
-      tlog(line);
-      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
-      return { ok: false, error: reason };
-    };
-    const declaredCwd = opts.cwd;
-    if (!declaredCwd || !fs.existsSync(declaredCwd)) {
-      return fenceRefuse('fenced-cwd-missing');
-    }
-    const outputsRoot = path.join(loadSettings().projectsRoot, '.command-center', 'outputs');
-    const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
-    const resolvedRoot = realOrNearest(outputsRoot);
-    const resolvedCwd  = realOrNearest(declaredCwd);
-    const within = fold(resolvedCwd) === fold(resolvedRoot) ||
-                   fold(resolvedCwd).startsWith(fold(resolvedRoot) + path.sep);
-    if (!within) {
-      return fenceRefuse('fenced-cwd-outside-outputs-sandbox');
-    }
-    tlog('pty-start: fenced-role cwd check PASSED');
-
-    // PHASE 2, AND ONLY NOW. Containment is established, so the resolver walks from a cwd main has
-    // already proven. No role directory is scanned for a launch whose cwd was never validated.
-    const fencePolicy = ptyStartAuthority.authorizeFencedRole({ role: launch.role, cwd: resolvedCwd });
-    if (!fencePolicy.ok) return { ok: false, error: fencePolicy.reason };
-    tlog(`pty-start: fenced-role declaration ACCEPTED (scope=${fencePolicy.scope})`);
-    // The process launches from the SAME canonical path the definition was resolved from. Spawning
-    // from the declared path instead would let the CLI discover project agents along ancestors of a
-    // junction/symlink that the resolver never scanned.
-    fencedCwd = resolvedCwd;
+  const refuse = (reason) => refuseLaunch('Pane launch', reason);
+  if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(id)) return refuse('invalid-pane-id');
+  if (ptys.has(id)) return refuse('pane-already-running');
+  if ([cols, rows].some((size) => size !== undefined && (!Number.isInteger(size) || size < 1 || size > 4096))) {
+    return refuse('invalid-pane-size');
+  }
+  if (opts.model !== undefined && !VALID_MODELS.has(opts.model)) return refuse('invalid-role-model');
+  if (opts.effort !== undefined && !VALID_EFFORTS.has(opts.effort)) return refuse('invalid-role-effort');
+  if (opts.initialPrompt !== undefined && opts.initialPrompt !== ''
+      && (typeof opts.initialPrompt !== 'string' || opts.initialPrompt.length > 4096
+        || !/^[A-Za-z0-9][A-Za-z0-9 .,/!?_:()'-]*$/.test(opts.initialPrompt))) {
+    return refuse('invalid-opening-prompt');
   }
 
-  // Never spawn into a missing directory: ConPTY throws Windows error 267 (ERROR_DIRECTORY)
-  // from a worker thread, which would surface as a fatal uncaught exception.
-  // Fenced: the validated canonical cwd. Everything else: unchanged.
-  const cwd = fencedCwd !== null ? fencedCwd
-    : ((opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE);
+  // The profile is the explicit default when a non-role pane has no repo selected.
+  // An explicitly supplied folder must resolve and be authorized for this kind of launch.
+  let cwd;
+  if (opts.cwd === undefined && launch.kind !== LAUNCH_KIND.ROLE) {
+    cwd = process.env.USERPROFILE || app.getPath('home');
+    try {
+      if (!fs.statSync(cwd).isDirectory()) return refuse('missing-home-directory');
+    } catch { return refuse('missing-home-directory'); }
+  } else {
+    const folder = launcherAuthorizer.authorize(opts.cwd, {
+      sandboxRole: launch.fenced ? launch.role : null,
+      includeReport: launch.role === 'reviewer',
+    });
+    if (!folder.ok) return refuse(folder.reason);
+    cwd = folder.dir;
+  }
+
+  let definition;
+  if (launch.kind === LAUNCH_KIND.ROLE) {
+    definition = ptyStartAuthority.authorizeRole({ role: launch.role }, launch.fenced);
+    if (!definition.ok) return { ok: false, error: definition.reason };
+  }
+
   // S09: a resume request is checked here, before the admission claim and the spawn, against main's
   // own offer (session-resume.js). A refusal is visible and starts nothing; no silent fresh start.
   const resumeCheck = sessionResume.checkResume({
@@ -2050,19 +2133,9 @@ ipcMain.handle('pty-start', (e, opts) => {
     // launch behavior is unchanged — but passing it explicitly makes main the single owner of the
     // directory the Library later lists and reads from, so launch and read can never diverge.
     args.push('-File', script, '-Url', url, '-VideoScout', '-RunId', runId, '-OutDir', VIDEO_SCOUT_RUN_ROOT);
-    // Gemini model / media-resolution / analysis mode / time range: validate against the
-    // allowlists in video-scout-args.js. videoModel and mediaResolution push only what passes —
-    // an invalid or missing value there is omitted so feed-gemini.ps1's own default applies. An
-    // EXPLICIT invalid analysisMode is NOT omitted-to-default: it REFUSES the launch (see
-    // video-scout-args.js) rather than silently falling through to the costliest full-video pass.
-    // Log the POST-VALIDATION outcome for every field (sent / omitted / rejected) so the Logs tab
-    // never implies a choice was honored when it was silently dropped.
+    // Validate explicit provider settings before passing arguments to PowerShell.
     const { args: geminiArgs, notes: geminiNotes, error: geminiError } = buildVideoScoutArgs(opts);
     for (const note of geminiNotes) tlog(`pty-start: video-scout ${note}`);
-    // A user-requested time range, or an explicit invalid analysisMode, that fails validation
-    // REFUSES the launch (visible error) rather than silently downgrading to a whole-video run.
-    // Same refusal pattern as the two checks above; enforced here in main so a bypassed/modified
-    // renderer can't skip it. See video-scout-args.js.
     if (geminiError) {
       if (win && !win.isDestroyed()) win.webContents.send('main-error', `Video Scout launch refused: ${geminiError}`);
       return { ok: false, error: geminiError };
@@ -2092,7 +2165,7 @@ ipcMain.handle('pty-start', (e, opts) => {
     || ((launch.kind === LAUNCH_KIND.ROLE || (launch.kind === LAUNCH_KIND.CLI && launch.cli === 'claude'))
       ? crypto.randomUUID() : null);
   if (!launch.videoScout) {
-    const run = buildAgentCommand(opts, launch, webFetch, claudeSessionId, resumeSessionId !== null); // role / bare CLI / undefined => plain shell
+    const run = buildAgentCommand(opts, launch, webFetch, claudeSessionId, resumeSessionId !== null, definition); // role / bare CLI / undefined => plain shell
     if (run) args.push('-Command', run);
   }
 
@@ -2134,6 +2207,7 @@ ipcMain.handle('pty-start', (e, opts) => {
     pageReaderPolicy: fencedRole && launch.role === pageReaderMod.ROLE ? require.resolve('./page-reader') : undefined,
     agentGit: agentPane,
     agentGitToken,
+    roleDefinition: definition,
   });
   let p;
   const envMode = fencedRole ? 'fenced-tier-1' : 'unfenced-current';

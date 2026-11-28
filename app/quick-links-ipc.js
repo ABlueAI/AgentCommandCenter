@@ -83,10 +83,14 @@ function createQuickLinksIpc(deps) {
     return { ok: true, config: result.config };
   }
 
+  function validId(id) {
+    return typeof id === 'string' && id.length <= policy.MAX_ID_LENGTH && policy.ID_PATTERN.test(id);
+  }
+
   async function handleOpen(event, id) {
     const denied = assess(event, 'open');
     if (denied) return denied;
-    if (typeof id !== 'string' || id.length > policy.MAX_ID_LENGTH || !policy.ID_PATTERN.test(id)) {
+    if (!validId(id)) {
       return refuse('open', IPC_REASON.INVALID_ID);
     }
     // Re-read and revalidate the complete persisted configuration for EVERY click. No cached renderer
@@ -119,6 +123,7 @@ function createQuickLinksIpc(deps) {
   async function handleOpenPreset(event, id) {
     const denied = assess(event, 'preset-open');
     if (denied) return denied;
+    if (!validId(id)) return refuse('preset-open', IPC_REASON.INVALID_ID);
     let result;
     try { result = await presets.open(id); }
     catch { return refuse('preset-open', 'firefox-launch-failed'); }

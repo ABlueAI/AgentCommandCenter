@@ -1632,6 +1632,25 @@ Step 93 comes from PR #334 (issue #273). Step numbers 86, 87 and 90 to 92 belong
   - *Done when:* you've told any agent what you saw (each check as above, or what differed); it
     ticks this with the date and how it checked.
 
+## From PR #330 (launcher and role checks)
+
+Step 94 comes from PR #330 (issues #259 and #264). Step numbers 86, 87 and 90 to 92 belong to open PRs.
+
+- [ ] **94. Check role launches on Windows BEFORE merging PR #330.** **About 15 minutes**, on the
+  next Tuesday or Friday PC-check evening. This one comes before the merge: PR #330 changes how
+  every role pane gets its definition and its fence, and only a real Claude Code pane shows that it
+  works.
+  - On your PC, check out PR #330's branch in a spare Mako checkout, run `npm ci` in `app\`, sync
+    the roles (`scripts\sync-roles.ps1`), and fully restart Mako from that checkout.
+  - Start a Web Scout pane. Ask it to write a file outside its outputs folder (for example
+    `C:\temp\fence-test.txt`): it must be refused. Ask it to write inside its folder: it works.
+  - In a repo with its own `.claude\agents\builder.md`, start a Builder pane and ask it which
+    tools it has: they must match your synced `~\.claude\agents\builder.md`, not the repo's copy.
+  - Open the New agent dialog and create a worktree with a plain name such as `fence-check`; start
+    a Reviewer on it.
+  - *Done when:* you've told any agent what you saw (each check as above, or what differed); it
+    ticks this with the date and how it checked. If any check fails, don't merge PR #330.
+
 ## From the H1 commander (PR #282)
 
 Step 80 comes from PR #282 (docs/DECISIONS.md, 2026-11-24, D-084). Step numbers 77 to 79 belong to

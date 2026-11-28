@@ -61,17 +61,9 @@ function isValidOffset(n) {
   return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= MAX_OFFSET_SECONDS;
 }
 
-// Describe an arbitrary, untrusted value for an error/log message WITHOUT risking a throw.
-// JSON.stringify throws on a BigInt (TypeError: Do not know how to serialize a BigInt) and on a
-// cyclic object (TypeError: Converting circular structure to JSON) — either could arrive here as
-// an explicit-invalid analysisMode over IPC, and a refusal path must never itself crash. Falls
-// back to a short, safe `<typeof: Tag>` description when stringification isn't possible.
+// Refusal messages never include arbitrary IPC values.
 function describeInvalidValue(value) {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return `<${typeof value}: ${Object.prototype.toString.call(value)}>`;
-  }
+  return value === null ? 'null' : typeof value;
 }
 
 // Predict which invocation path feed-gemini.ps1 will choose, for Logs-tab visibility. Mirrors
@@ -180,7 +172,8 @@ function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoU
         notes.push(`mediaResolution="${mediaResolution}" sent as -MediaResolution (ENFORCED on the SDK/YouTube route via generationConfig; on the CLI fallback it is recorded in the run log only — the CLI has no flag for it)`);
       }
     } else {
-      notes.push(`mediaResolution=${JSON.stringify(mediaResolution)} REJECTED (not in VALID_MEDIA_RESOLUTIONS allowlist) — dropped, script default applies`);
+      notes.push('mediaResolution REJECTED (not in VALID_MEDIA_RESOLUTIONS allowlist)');
+      return { args: [], notes, error: 'Invalid media resolution. Launch refused.' };
     }
   }
 
@@ -307,8 +300,8 @@ function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoU
       error = 'Time range needs both a start and an end. Fill in both, or clear both to analyze the whole video.';
       notes.push(`startOffset/endOffset REJECTED: both are required to analyze a range (only one was given) — launch refused`);
     } else if (!isValidOffset(startOffset) || !isValidOffset(endOffset)) {
-      error = `Time range must be whole seconds between 0 and ${MAX_OFFSET_SECONDS} (24h). Got start=${JSON.stringify(startOffset)}, end=${JSON.stringify(endOffset)}.`;
-      notes.push(`startOffset=${JSON.stringify(startOffset)} endOffset=${JSON.stringify(endOffset)} REJECTED (must be non-negative integers, 0-${MAX_OFFSET_SECONDS}) — launch refused`);
+      error = `Time range must be whole seconds between 0 and ${MAX_OFFSET_SECONDS} (24h). Launch refused.`;
+      notes.push(`startOffset/endOffset REJECTED (must be non-negative integers, 0-${MAX_OFFSET_SECONDS}) — launch refused`);
     } else if (endOffset <= startOffset) {
       error = `Time range end (${endOffset}s) must be after start (${startOffset}s).`;
       notes.push(`startOffset=${startOffset} endOffset=${endOffset} REJECTED (end must be strictly after start) — launch refused`);

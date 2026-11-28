@@ -19,6 +19,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const Module = require('module');
+const { pathToFileURL } = require('url');
 
 let passed = 0, failed = 0, outstanding = [];
 function assert(cond, label) {
@@ -44,11 +45,10 @@ fs.writeFileSync(path.join(USER_DATA, 'settings.json'), JSON.stringify({ project
 const CLAUDE_JSON = path.join(HOME, '.claude.json');
 
 const record = { handled: new Map(), on: new Map() };
-const mainFrame = { url: require('url').pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString() };
-let trustedEvent;
 function electronStub() {
-  const wc = { mainFrame, on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
-  trustedEvent = { sender: wc, senderFrame: mainFrame };
+  const mainFrame = { url: pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString() };
+  const wc = { mainFrame, on() {}, send(ch, line) { (record.sent ??= []).push(String(line)); }, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
+  record.event = { sender: wc, senderFrame: wc.mainFrame };
   const w = new Proxy({ webContents: wc, isDestroyed: () => false }, { get(t, k) { return k in t ? t[k] : () => {}; } });
   class BrowserWindow { constructor() { return w; } static getAllWindows() { return []; } }
   return {
@@ -90,10 +90,8 @@ const readTrust = () => {
   section('SERIALISATION — N concurrent calls, no lost update');
   {
     const N = 20;
-    // Distinct roles AND distinct calls: this part measures the LOCK, so every call must produce a
-    // different trust key. Same-role uniqueness is a separate property, measured in its own suite.
     const results = await Promise.all(
-      Array.from({ length: N }, (_, i) => ensure(trustedEvent, { role: 'lockrole' + i }))
+      Array.from({ length: N }, () => ensure(record.event, { role: 'web-scout' }))
     );
     assert(results.length === N, 'all ' + N + ' promises settled');
     assert(results.every((r) => r && r.ok === true), 'every call reported ok');
@@ -114,14 +112,12 @@ const readTrust = () => {
     // would silently hang every future sandbox launch app-wide.
     const good = fs.readFileSync(CLAUDE_JSON, 'utf8');
     fs.writeFileSync(CLAUDE_JSON, '{ this is not json', 'utf8');
-    const during = await ensure(trustedEvent, { role: 'parsefail' });
-    assert(during && during.ok === true,
-      'a corrupt trust file does NOT block the sandbox launch (best-effort write, as designed)');
-    assert(fs.existsSync(during.dir), 'and the sandbox directory still exists');
+    const during = await ensure(record.event, { role: 'web-scout' });
+    assert(during?.error === 'sandbox-trust-file-unparseable', 'a corrupt trust file visibly refuses the sandbox with its own reason');
     fs.writeFileSync(CLAUDE_JSON, good, 'utf8');
 
     const after = await Promise.race([
-      ensure(trustedEvent, { role: 'afterparsefail' }),
+      ensure(record.event, { role: 'web-scout' }),
       new Promise((r) => setTimeout(() => r({ ok: false, timedOut: true }), 5000)),
     ]);
     assert(after && after.ok === true && !after.timedOut,
@@ -135,35 +131,81 @@ const readTrust = () => {
     const good = fs.readFileSync(CLAUDE_JSON, 'utf8');
     fs.rmSync(CLAUDE_JSON, { force: true });
     fs.mkdirSync(CLAUDE_JSON, { recursive: true });
-    const during = await ensure(trustedEvent, { role: 'renamefail' });
-    assert(during && during.ok === true, 'a failing rename does not block the launch either');
+    const outputs = path.join(PROJECTS, '.command-center', 'outputs');
+    const foldersBefore = fs.readdirSync(outputs).length;
+    const sentBefore = (record.sent || []).length;
+    const during = await ensure(record.event, { role: 'web-scout' });
+    assert(during?.error === 'sandbox-trust-write-failed', 'an unwritable trust file visibly refuses the sandbox');
+    assert((record.sent || []).slice(sentBefore).some((l) => /sandbox-trust-write-failed \(E[A-Z]+\)/.test(l)),
+      'and the Logs tab line carries the error code');
+    assert(fs.readdirSync(outputs).length === foldersBefore && !fs.readdirSync(HOME).some((n) => n.endsWith('.tmp')),
+      'the refused sandbox folder and its temporary trust file are removed');
     fs.rmSync(CLAUDE_JSON, { recursive: true, force: true });
     fs.writeFileSync(CLAUDE_JSON, good, 'utf8');
     const after = await Promise.race([
-      ensure(trustedEvent, { role: 'afterrenamefail' }),
+      ensure(record.event, { role: 'web-scout' }),
       new Promise((r) => setTimeout(() => r({ ok: false, timedOut: true }), 5000)),
     ]);
     assert(after && after.ok === true && !after.timedOut, 'and the lock is still free afterwards');
+  }
+
+  section('SANDBOX ROOT — a control folder that is not a plain directory refuses with its own reason');
+  {
+    const outputs = path.join(PROJECTS, '.command-center', 'outputs');
+    const saved = outputs + '-saved';
+    fs.renameSync(outputs, saved);
+    fs.writeFileSync(outputs, 'not a folder');
+    try {
+      const res = await ensure(record.event, { role: 'web-scout' });
+      assert(res?.ok === false && res.error === 'invalid-outputs-root', 'an outputs path that is a file refuses as invalid-outputs-root');
+    } finally {
+      fs.rmSync(outputs, { force: true });
+      fs.renameSync(saved, outputs);
+    }
+    const blockedRoot = path.join(FIX, 'blocked-root');
+    fs.writeFileSync(blockedRoot, 'a file where the projects folder should be');
+    const settingsFile = path.join(USER_DATA, 'settings.json');
+    const settingsBefore = fs.readFileSync(settingsFile, 'utf8');
+    fs.writeFileSync(settingsFile, JSON.stringify({ projectsRoot: blockedRoot, selectedRepo: '' }));
+    const sentBefore = (record.sent || []).length;
+    try {
+      const res = await ensure(record.event, { role: 'web-scout' });
+      assert(res?.ok === false && res.error === 'sandbox-create-failed'
+        && (record.sent || []).slice(sentBefore).some((l) => /sandbox-create-failed \(E[A-Z]+\)/.test(l)),
+      'a sandbox that cannot be created refuses with the error code in the Logs tab');
+    } finally {
+      fs.writeFileSync(settingsFile, settingsBefore);
+      fs.rmSync(blockedRoot, { force: true });
+    }
   }
 
   section('READ-ONLY / PERMISSION PATH — disposable fixture only, never real user configuration');
   {
     // Attempted against a fixture file with icacls. If this machine will not actually produce a
     // denial for the owning user, the evidence is RETAINED AS OUTSTANDING rather than claimed.
+    const { execFileSync } = require('child_process');
+    const who = (process.env.USERDOMAIN || '') + '\\' + (process.env.USERNAME || '');
+    const acl = (args) => execFileSync('icacls', [CLAUDE_JSON, ...args], { stdio: ['ignore', 'ignore', 'ignore'] });
     let denied = false;
+    let setDeny = false;
     try {
-      const { execFileSync } = require('child_process');
-      const who = (process.env.USERDOMAIN || '') + '\\' + (process.env.USERNAME || '');
-      execFileSync('icacls', [CLAUDE_JSON, '/deny', who + ':(W)'], { stdio: ['ignore', 'ignore', 'ignore'] });
-      try { fs.appendFileSync(CLAUDE_JSON, 'x'); } catch (e) { denied = true; }
-    } catch (e) { /* icacls unavailable */ }
+      acl(['/deny', who + ':(W)']);
+      setDeny = true;
+      try { fs.closeSync(fs.openSync(CLAUDE_JSON, 'a')); }
+      catch { denied = true; }
+    } catch { /* icacls unavailable */ }
 
+    let result;
+    try {
+      if (denied) result = await ensure(record.event, { role: 'web-scout' });
+    } finally {
+      if (setDeny) acl(['/remove:d', who]);
+    }
     if (denied) {
-      const r = await ensure(trustedEvent, { role: 'readonly' });
-      assert(r && r.ok === true, 'a write-denied trust file does NOT block the sandbox launch');
-      assert(fs.existsSync(r.dir), 'and the sandbox directory is still created');
+      assert(result?.ok === true || result?.error === 'sandbox-trust-write-failed',
+        'the atomic replacement either succeeds or returns a visible refusal');
       const after = await Promise.race([
-        ensure(trustedEvent, { role: 'afterreadonly' }),
+        ensure(record.event, { role: 'web-scout' }),
         new Promise((res) => setTimeout(() => res({ ok: false, timedOut: true }), 5000)),
       ]);
       assert(after && after.ok === true && !after.timedOut, 'and the lock is released after the denial');
@@ -173,11 +215,7 @@ const readTrust = () => {
         + 'Retained as OUTSTANDING; WO-7 is not claimed complete on this axis.');
       process.stdout.write('  ! OUTSTANDING: fixture write-denial not reproducible on this machine\n');
     }
-    try {
-      const { execFileSync } = require('child_process');
-      const who = (process.env.USERDOMAIN || '') + '\\' + (process.env.USERNAME || '');
-      execFileSync('icacls', [CLAUDE_JSON, '/remove:d', who], { stdio: ['ignore', 'ignore', 'ignore'] });
-    } catch (e) { /* best effort */ }
+
   }
 
   process.env.USERPROFILE = prevUser;

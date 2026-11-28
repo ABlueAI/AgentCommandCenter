@@ -157,5 +157,27 @@ section('REFUSAL LOGGING IS BOUNDED');
   assert(calls.refusals[0].indexOf('pty-start refused') === 0, 'and it is the bounded refusal form');
 }
 
+section('ROLE HOOKS \u2014 only a fenced role may carry exactly one PreToolUse hook');
+{
+  const req = { role: 'builder' };
+  const definition = { ok: true, text: 'T', path: 'P', scope: 'user', roleArg: 'A', settingsArg: null };
+  const plain = build(makeWindow(), { resolve: () => definition });
+  const got = plain.authority.authorizeRole(req, false);
+  assert(got === definition && plain.calls.policy === 0,
+    'an unfenced role without hooks returns its definition and skips the fence policy');
+  const hooked = build(makeWindow(), { resolve: () => ({ ...definition, settingsArg: 'S', singlePreToolUse: true }) });
+  const unfenced = hooked.authority.authorizeRole(req, false);
+  assert(unfenced.ok === false && unfenced.reason === 'resolve-unexpected-role-hooks' && hooked.calls.refusals.length === 1,
+    'an unfenced role that declares a hook refuses visibly');
+  const many = build(makeWindow(), { resolve: () => ({ ...definition, settingsArg: 'S', singlePreToolUse: false }) });
+  const fenced = many.authority.authorizeRole({ role: 'web-scout' }, true);
+  assert(fenced.ok === false && fenced.reason === 'resolve-unexpected-role-hooks' && many.calls.refusals.length === 1,
+    'a fenced role with anything beyond one PreToolUse hook refuses visibly');
+  const one = build(makeWindow(), { resolve: () => ({ ...definition, settingsArg: 'S', singlePreToolUse: true }) });
+  const ok = one.authority.authorizeRole({ role: 'web-scout' }, true);
+  assert(ok.ok === true && ok.settingsArg === 'S' && ok.hookPath === 'H' && one.calls.policy === 1,
+    'a fenced role with exactly one PreToolUse hook passes the fence policy and keeps its settings');
+}
+
 process.stdout.write('\npty-start-authority: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);

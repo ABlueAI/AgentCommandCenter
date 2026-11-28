@@ -112,6 +112,7 @@ function renderer(ipc = {}) {
       ccClipboardConsumer: require('./clipboard-consumer'),
       ccReportFollowup: { createReportFollowup: noop },
       ccSessionResumeView: require('./session-resume-view'),
+      ccTaskName: { validateTask: require('../task-name').validateTask },
       ccTTSSelection: { createSelectionMemory: noop, installMouseTrackingSelectionFallback: noop },
     },
     cc: { tlogReset: async () => {}, ...ipc },

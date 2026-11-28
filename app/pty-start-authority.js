@@ -9,12 +9,10 @@
 //   assess()              — sender trust, then main-owned classification. Runs as the FIRST
 //                           statement of the handler, before any log, filesystem read, pane-status
 //                           enrolment, admission claim, command construction, or spawn.
-//   authorizeFencedRole() — effective-definition resolution and fence policy. Runs ONLY after the
-//                           fenced cwd containment gate has passed, so no role directory is ever
-//                           scanned for a launch whose cwd was not established first.
+//   authorizeRole()       — read the deployed role and, for fenced panes, check its fence policy.
+//                           Main calls it after authorizing the launch directory.
 //
-// Splitting them is deliberate: containment must precede scanning, and a single call could not
-// express that without pulling main's settings/filesystem access into this module.
+// Main owns the directory checks. This module owns role resolution and the resulting refusal.
 //
 // Pure: every dependency is injected. No Electron, filesystem, process, or spawning.
 
@@ -49,17 +47,20 @@ function createPtyStartAuthority(deps) {
     return { ok: true, launch: launch };
   }
 
-  function authorizeFencedRole(req) {
-    const role = req && req.role;
-    const cwd = req && req.cwd;
-    const found = resolveDefinition({ role: role, cwd: cwd });
+  function authorizeRole(req, fenced) {
+    const found = resolveDefinition(req);
     if (!found || found.ok !== true) return refuse('resolve', (found && found.reason) || 'resolve-bad-input');
-    const policy = assertPolicy({ role: role, text: found.text });
+    if (!fenced) {
+      if (found.settingsArg) return refuse('resolve', 'resolve-unexpected-role-hooks');
+      return found;
+    }
+    const policy = assertPolicy({ role: req.role, text: found.text });
     if (!policy || policy.ok !== true) return refuse('policy', (policy && policy.reason) || 'fence-policy-declaration-unparseable');
-    return { ok: true, definitionPath: found.path, scope: found.scope, hookPath: policy.hookPath };
+    if (found.settingsArg && !found.singlePreToolUse) return refuse('policy', 'resolve-unexpected-role-hooks');
+    return { ...found, definitionPath: found.path, hookPath: policy.hookPath };
   }
 
-  return { assess: assess, authorizeFencedRole: authorizeFencedRole };
+  return { assess, authorizeRole, authorizeFencedRole: (req) => authorizeRole(req, true) };
 }
 
-module.exports = { createPtyStartAuthority: createPtyStartAuthority };
+module.exports = { createPtyStartAuthority };

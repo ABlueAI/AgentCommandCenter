@@ -1,283 +1,183 @@
 'use strict';
-// Run: node app/role-definition-resolver.test.js
-//
-// EFFECTIVE-DEFINITION RESOLUTION MATRIX.
-//
-// Reading `~/.claude/agents/<role>.md` is not sufficient: documented precedence is
-// managed(1) > --agents(2) > project(3) > user(4) > plugin(5), identity is the frontmatter `name`
-// rather than the filename, and duplicate names inside one tree resolve by filesystem read order
-// with NO documented precedence. This suite pins that main REFUSES whenever it cannot establish
-// which definition the launched CLI will consume, rather than launching with a disclaimer.
 
-const path = require('path');
-const { createRoleDefinitionResolver, REASON, DEFAULT_MANAGED_PATHS, DEFAULT_MANAGED_REGISTRY_KEYS } =
-  require('./role-definition-resolver');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const { createRoleDefinitionResolver, REASON, ROLE_ARG_ENV, ROLE_SETTINGS_ENV,
+  DEFAULT_MANAGED_PATHS, DEFAULT_MANAGED_REGISTRY_KEYS } = require('./role-definition-resolver');
 
-let passed = 0, failed = 0;
-function assert(cond, label) {
-  if (cond) { process.stdout.write('  \u2713 ' + label + '\n'); passed++; }
-  else { process.stderr.write('  x FAIL: ' + label + '\n'); failed++; }
+let passed = 0;
+let failed = 0;
+function assert(condition, label) {
+  if (condition) { passed++; process.stdout.write('  ✓ ' + label + '\n'); }
+  else { failed++; process.stderr.write('  x FAIL: ' + label + '\n'); }
 }
-function section(t) { process.stdout.write('\n' + t + '\n'); }
+function section(title) { process.stdout.write('\n' + title + '\n'); }
 
-const HOME = 'C:\\Users\\sampleuser';
-const SANDBOX = 'D:\\Workspace\\.command-center\\outputs\\web-scout-2026-08-28T00-00-00-abc123';
-
-function roleDoc(name, extra) {
-  return ['---', 'name: ' + name, 'description: d', 'tools: WebSearch, WebFetch, Read, Write',
-    (extra || 'model: sonnet'), '---', '', 'Body.'].join('\n');
+function roleDoc(name, model = 'model: sonnet') {
+  return ['---', 'name: ' + name, 'description: A short description.', 'tools: Read, Write',
+    model, '---', '', 'Body.'].join('\n');
 }
-
-// Virtual filesystem: `files` maps an absolute path to content, `dirs` is the set of directories.
-function makeFsx(files) {
-  const norm = (p) => path.resolve(p).toLowerCase();
-  const table = new Map();
-  const dirs = new Set();
-  for (const k of Object.keys(files)) {
-    table.set(norm(k), files[k]);
-    let d = path.dirname(path.resolve(k));
-    while (true) { dirs.add(norm(d)); const up = path.dirname(d); if (up === d) break; d = up; }
-  }
-  return {
-    existsSync: (p) => table.has(norm(p)) || dirs.has(norm(p)),
-    readFileSync: (p) => {
-      const v = table.get(norm(p));
-      if (v === undefined) { const e = new Error('ENOENT'); e.code = 'ENOENT'; throw e; }
-      return v;
-    },
-    readdirSync: (p) => {
-      const base = norm(p);
-      const out = new Map();
-      for (const key of table.keys()) {
-        if (key.indexOf(base + path.sep.toLowerCase()) !== 0) continue;
-        const rel = key.slice(base.length + 1);
-        const first = rel.split(path.sep)[0];
-        const isDir = rel.indexOf(path.sep) !== -1;
-        // Full Dirent-shaped entry: the resolver classifies entry TYPE before any extension filter.
-        if (!out.has(first)) {
-          out.set(first, { name: first, isDirectory: () => isDir, isFile: () => !isDir, isSymbolicLink: () => false });
-        }
-      }
-      return Array.from(out.values());
-    },
-  };
-}
-
 const noManaged = () => ({ present: false });
-function make(files, opts) {
-  const o = opts || {};
-  return createRoleDefinitionResolver({
-    fsx: o.fsx || makeFsx(files),
-    homeDir: HOME,
-    probeRegistryKey: o.probeRegistryKey || noManaged,
-    managedPaths: o.managedPaths || [],
-    managedRegistryKeys: o.managedRegistryKeys || DEFAULT_MANAGED_REGISTRY_KEYS,
-    caps: o.caps,
-  });
-}
 
-const USER_WS = HOME + '\\.claude\\agents\\web-scout.md';
-
-section('MANAGED SCOPE \u2014 refuse on presence, refuse on unreadability, never parse');
+section('Exact deployed role files');
 {
-  for (const managedPath of DEFAULT_MANAGED_PATHS) {
-    const files = {}; files[USER_WS] = roleDoc('web-scout'); files[managedPath + '\\x'] = 'y';
-    const r = make(files, { managedPaths: [managedPath] }).resolve({ role: 'web-scout', cwd: SANDBOX });
-    assert(!r.ok && r.reason === REASON.MANAGED_PRESENT, 'REFUSES when present: ' + managedPath);
-  }
-  for (const key of DEFAULT_MANAGED_REGISTRY_KEYS) {
-    const files = {}; files[USER_WS] = roleDoc('web-scout');
-    const r = make(files, { probeRegistryKey: (k) => ({ present: k === key }) })
-      .resolve({ role: 'web-scout', cwd: SANDBOX });
-    assert(!r.ok && r.reason === REASON.MANAGED_PRESENT, 'REFUSES when policy key present: ' + key);
-  }
-  const files = {}; files[USER_WS] = roleDoc('web-scout');
-  const thrown = make(files, { probeRegistryKey: () => { throw new Error('access denied'); } })
-    .resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!thrown.ok && thrown.reason === REASON.MANAGED_UNREADABLE,
-    'REFUSES when a policy probe cannot answer (unreadable is not absent)');
-  const shapeless = make(files, { probeRegistryKey: () => ({}) }).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!shapeless.ok && shapeless.reason === REASON.MANAGED_UNREADABLE,
-    'REFUSES when a probe returns an unusable answer');
-  const statThrows = make(files, {
-    managedPaths: ['C:\\Program Files\\ClaudeCode\\managed-settings.json'],
-    fsx: Object.assign({}, makeFsx(files), { existsSync: () => { throw new Error('EPERM'); } }),
-  }).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!statThrows.ok && statThrows.reason === REASON.MANAGED_UNREADABLE,
-    'REFUSES when a managed path cannot be stat-ed');
-  assert(DEFAULT_MANAGED_PATHS.join('|').indexOf('ProgramData') === -1,
-    'the obsolete ProgramData path is NOT consulted (the CLI does not read it)');
-  assert(DEFAULT_MANAGED_PATHS.indexOf('C:\\Program Files\\ClaudeCode\\.claude\\agents') !== -1,
-    'the managed AGENTS directory is covered, not only managed-settings.json');
-}
-
-section('USER SCOPE \u2014 the ordinary path still resolves');
-{
-  const files = {}; files[USER_WS] = roleDoc('web-scout');
-  const r = make(files).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(r.ok && r.scope === 'user', 'resolves from ~/.claude/agents when nothing overrides it');
-  assert(r.ok && r.path.toLowerCase() === path.resolve(USER_WS).toLowerCase(), 'and reports the winning path');
-}
-
-section('PROJECT SCOPE OVERRIDE \u2014 identity is the frontmatter name, not the filename');
-{
-  // A project definition on an ANCESTOR of the launch cwd outranks user scope.
-  const proj = 'D:\\Workspace\\.claude\\agents\\anything.md';
-  const files = {}; files[USER_WS] = roleDoc('web-scout'); files[proj] = roleDoc('web-scout', 'model: opus');
-  const r = make(files).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(r.ok && r.scope === 'project', 'a project definition outranks the user definition');
-  assert(r.ok && r.text.indexOf('model: opus') !== -1,
-    'and it is selected by its frontmatter NAME even though the filename is anything.md');
-}
-{
-  // Closest-to-cwd wins among project levels (documented for v2.1.178+; installed is 2.1.250).
-  const near = 'D:\\Workspace\\.command-center\\.claude\\agents\\a.md';
-  const far = 'D:\\Workspace\\.claude\\agents\\b.md';
-  const files = {}; files[USER_WS] = roleDoc('web-scout');
-  files[near] = roleDoc('web-scout', 'model: near'); files[far] = roleDoc('web-scout', 'model: far');
-  const r = make(files).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(r.ok && r.text.indexOf('model: near') !== -1, 'the definition CLOSEST to the launch cwd wins');
-}
-{
-  // "Winner" means the highest-priority candidate MATCHING THE REQUESTED IDENTITY. A nearer
-  // directory holding only OTHER agents must not end the search.
-  const nearOther = 'D:\\Workspace\\.command-center\\.claude\\agents\\operator.md';
-  const farMatch = 'D:\\Workspace\\.claude\\agents\\ws.md';
-  const files = {}; files[nearOther] = roleDoc('operator'); files[farMatch] = roleDoc('web-scout', 'model: far');
-  const r = make(files).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(r.ok && r.text.indexOf('model: far') !== -1,
-    'a nearer directory containing only OTHER identities does not end the search');
-}
-{
-  const sub = 'D:\\Workspace\\.claude\\agents\\nested\\deep.md';
-  const files = {}; files[sub] = roleDoc('web-scout');
-  const r = make(files).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(r.ok && r.scope === 'project', 'subfolders are scanned recursively (they share the namespace)');
-}
-
-section('AMBIGUITY AND CAPS \u2014 refuse rather than guess');
-{
-  const files = {};
-  files['D:\\Workspace\\.claude\\agents\\one.md'] = roleDoc('web-scout');
-  files['D:\\Workspace\\.claude\\agents\\sub\\two.md'] = roleDoc('web-scout');
-  const r = make(files).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!r.ok && r.reason === REASON.AMBIGUOUS_IDENTITY,
-    'REFUSES two files declaring the same name in one tree (loader uses read order, undocumented)');
-}
-{
-  const files = {}; files[USER_WS] = roleDoc('web-scout');
-  const r = make(files, { caps: { ancestors: 1, filesPerDir: 64, depth: 4 } })
-    .resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!r.ok && r.reason === REASON.ANCESTOR_CAP, 'REFUSES when the ancestor cap is exceeded');
-  const many = {};
-  for (let i = 0; i < 5; i++) many['D:\\Workspace\\.claude\\agents\\f' + i + '.md'] = roleDoc('r' + i);
-  many[USER_WS] = roleDoc('web-scout');
-  const c = make(many, { caps: { ancestors: 32, filesPerDir: 2, depth: 4 } })
-    .resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!c.ok && c.reason === REASON.SCAN_CAP, 'REFUSES when the per-directory scan cap is exceeded');
-}
-{
-  const files = {};
-  files[USER_WS] = roleDoc('web-scout');
-  files[HOME + '\\.claude\\agents\\broken.md'] = '---\nname: x\ndescription: |\n  block\n---\n';
-  const r = make(files).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!r.ok && r.reason === REASON.CANDIDATE_UNSUPPORTED,
-    'REFUSES when ANY sibling candidate uses an unsupported grammar (never silently skipped)');
-}
-{
-  const files = {}; files[USER_WS] = roleDoc('web-scout');
-  const fsx = Object.assign({}, makeFsx(files), {
-    readFileSync: () => { const e = new Error('EACCES'); e.code = 'EACCES'; throw e; },
-  });
-  const r = make(files, { fsx }).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!r.ok && r.reason === REASON.CANDIDATE_UNREADABLE, 'REFUSES an unreadable candidate');
-}
-
-section('DOCUMENTATION FILES ARE SKIPPED, NOT REFUSED');
-{
-  const files = {};
-  files[USER_WS] = roleDoc('web-scout');
-  files[HOME + '\\.claude\\agents\\README.md'] = '# Notes\n\nNo frontmatter here.\n';
-  files[HOME + '\\.claude\\agents\\nameless.md'] = '---\ndescription: d\n---\n';
-  const r = make(files).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(r.ok === true, 'a no-frontmatter file and a no-name file are skipped as documentation');
-}
-
-section('N3 \u2014 linked or unsupported agent-tree entries REFUSE; they are never followed or skipped');
-{
-  // Injected directory responses: add synthetic entries to one directory's listing, typed the way
-  // Node reports them. On Windows a junction or symlink is reported as isSymbolicLink() true and
-  // isDirectory()/isFile() false. The linked target is NEVER read: readFileSync on it throws, so a
-  // resolver that followed the link instead of refusing would report unreadable, not linked.
-  const USER_AGENTS = HOME + '\\.claude\\agents';
-  function withEntries(files, dir, extra) {
-    const base = makeFsx(files);
-    const target = path.resolve(dir).toLowerCase();
-    return Object.assign({}, base, {
-      readdirSync: (p, o) => {
-        const listed = base.readdirSync(p, o);
-        return path.resolve(p).toLowerCase() === target ? listed.concat(extra) : listed;
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-roles-'));
+  const agents = path.join(home, '.claude', 'agents');
+  const cwd = path.join(home, 'repo');
+  const projectAgents = path.join(cwd, '.claude', 'agents');
+  const deployed = path.join(agents, 'web-scout.md');
+  const resolve = (role = 'web-scout', fsx = fs) => createRoleDefinitionResolver({
+    fsx, homeDir: home, managedPaths: [], managedRegistryKeys: [], probeRegistryKey: noManaged,
+  }).resolve({ role, cwd });
+  try {
+    fs.mkdirSync(agents, { recursive: true });
+    fs.mkdirSync(projectAgents, { recursive: true });
+    fs.writeFileSync(path.join(projectAgents, 'web-scout.md'), roleDoc('web-scout', 'model: opus'));
+    fs.writeFileSync(path.join(agents, 'other.md'), roleDoc('web-scout'));
+    assert(resolve().reason === REASON.ROLE_NOT_DEPLOYED, 'project and alternate filenames cannot supply the role');
+    fs.renameSync(path.join(agents, 'other.md'), path.join(agents, 'Web-Scout.md'));
+    assert(resolve().reason === REASON.ROLE_NOT_DEPLOYED, 'filename case must match exactly');
+    fs.renameSync(path.join(agents, 'Web-Scout.md'), deployed);
+    const result = resolve();
+    assert(result.ok && result.path === deployed && result.text === roleDoc('web-scout'), 'uses the exact deployed file');
+    const unreadable = Object.assign({}, fs, {
+      openSync(file, ...args) {
+        if (file === deployed) throw Object.assign(new Error('denied'), { code: 'EACCES' });
+        return fs.openSync(file, ...args);
       },
     });
+    assert(resolve('web-scout', unreadable).reason === REASON.CANDIDATE_UNREADABLE, 'unreadable file refuses');
+    const changed = Object.assign({}, fs, {
+      openSync(file, ...args) {
+        return fs.openSync(file === deployed ? path.join(projectAgents, 'web-scout.md') : file, ...args);
+      },
+    });
+    assert(resolve('web-scout', changed).reason === REASON.CANDIDATE_UNREADABLE,
+      'the opened file must match the exact file inspected');
+    // Each malformed definition refuses with its own bounded reason, so Blue can tell which line of
+    // which file to fix.
+    const doc = (lines, body = 'Body.') => ['---', ...lines, '---', '', body].join('\n');
+    const base = ['name: web-scout', 'description: A short description.', 'tools: Read, Write'];
+    const malformed = [
+      ['No frontmatter.', REASON.ROLE_FRONTMATTER_INVALID, 'no frontmatter'],
+      [roleDoc('operator'), REASON.ROLE_NAME_MISMATCH, 'a different name'],
+      [Buffer.from([0xff]), REASON.ROLE_NOT_UTF8, 'invalid UTF-8'],
+      [roleDoc('web-scout').split('Body.')[0], REASON.ROLE_BODY_EMPTY, 'an empty prompt body'],
+      [doc(['name: web-scout', 'description: A short description.']), REASON.ROLE_TOOLS_MISSING, 'no tools line'],
+      [doc(['name: web-scout', 'description: A short description.', 'tools:']), REASON.ROLE_TOOLS_EMPTY, 'an empty tools line'],
+      [doc(['name: web-scout', 'tools: Read, Write']), REASON.ROLE_DESCRIPTION_MISSING, 'no description'],
+      [doc([...base, 'extra: value']), REASON.ROLE_UNKNOWN_FIELD, 'an unknown frontmatter field'],
+      [doc([...base, 'permissionMode: bypassPermissions']), REASON.ROLE_INVALID_PERMISSION_MODE, 'a permission mode other than default'],
+      [doc([...base, 'permissionMode: acceptEdits']), REASON.ROLE_INVALID_PERMISSION_MODE, 'acceptEdits as the permission mode'],
+      [doc([...base, 'model: "bad model!"']), REASON.ROLE_INVALID_MODEL, 'an invalid model'],
+      [doc([...base, 'effort: ultra']), REASON.ROLE_INVALID_EFFORT, 'an invalid effort'],
+      [doc([...base, 'color: magenta']), REASON.ROLE_INVALID_COLOR, 'a colour outside the list'],
+      [doc(base, 'Body with a control \u0001 character.'), REASON.ROLE_CONTROL_CHARACTER, 'a control character'],
+      [doc(base, 'x'.repeat(16 * 1024 + 1)), REASON.ROLE_TOO_LARGE, 'a file over 16 KiB'],
+      // Spaces encode to six characters each in the launch argument: a file under the size cap whose
+      // encoded definition is over the argument cap.
+      [doc(base, 'a ' + ' '.repeat(15000) + 'b'), REASON.ROLE_ARG_TOO_LONG, 'an encoded definition over the argument cap'],
+    ];
+    for (const [content, reason, label] of malformed) {
+      fs.writeFileSync(deployed, content);
+      const got = resolve();
+      assert(got.ok === false && got.reason === reason, `${label} refuses with ${reason} (got ${got.reason})`);
+    }
+    fs.writeFileSync(deployed, doc([...base, 'permissionMode: default', 'model: sonnet', 'effort: high', 'color: blue']));
+    assert(resolve().ok === true, 'the allowed values of every checked field still resolve');
+    assert(!Object.prototype.hasOwnProperty.call(REASON, 'CANDIDATE_UNSUPPORTED'),
+      'no generic "unsupported grammar" reason is left to hide which check failed');
+    fs.unlinkSync(deployed);
+    fs.linkSync(path.join(projectAgents, 'web-scout.md'), deployed);
+    assert(resolve().reason === REASON.LINKED_ENTRY, 'a hard link cannot supply the role');
+    fs.unlinkSync(deployed);
+    fs.mkdirSync(deployed);
+    assert(resolve().reason === REASON.UNSUPPORTED_ENTRY, 'a directory at the exact filename refuses');
+    fs.rmdirSync(deployed);
+    fs.renameSync(agents, agents + '-saved');
+    fs.symlinkSync(projectAgents, agents, 'junction');
+    assert(resolve().reason === REASON.LINKED_ENTRY, 'a linked agents directory refuses');
+    fs.rmSync(agents, { force: true });
+    fs.renameSync(path.dirname(agents), path.dirname(agents) + '-saved');
+    fs.symlinkSync(path.dirname(projectAgents), path.dirname(agents), 'junction');
+    assert(resolve().reason === REASON.LINKED_ENTRY, 'a linked configuration directory refuses');
+    fs.rmSync(path.dirname(agents), { force: true });
+    for (const name of ['other/name', 'other\\name', '..', 'a..b', 'x'.repeat(65), 12]) {
+      assert(resolve(name).reason === REASON.BAD_INPUT, 'invalid role name refuses before filename lookup');
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
   }
-  const linkEntry = (name) => ({ name, isDirectory: () => false, isFile: () => false, isSymbolicLink: () => true });
-  const specialEntry = (name) => ({ name, isDirectory: () => false, isFile: () => false, isSymbolicLink: () => false });
-
-  const files = {}; files[USER_WS] = roleDoc('web-scout');
-  const linkedDir = make(files, { fsx: withEntries(files, USER_AGENTS, [linkEntry('linked-roles')]) })
-    .resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!linkedDir.ok && linkedDir.reason === REASON.LINKED_ENTRY,
-    'REFUSES a linked subdirectory with NO .md suffix (previously skipped silently)');
-
-  const linkedMd = make(files, { fsx: withEntries(files, USER_AGENTS, [linkEntry('other.md')]) })
-    .resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!linkedMd.ok && linkedMd.reason === REASON.LINKED_ENTRY,
-    'REFUSES a linked .md entry before it is read (never followed)');
-
-  const special = make(files, { fsx: withEntries(files, USER_AGENTS, [specialEntry('pipe-or-device')]) })
-    .resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!special.ok && special.reason === REASON.UNSUPPORTED_ENTRY,
-    'REFUSES an entry that is neither a link, a directory nor a regular file');
-
-  const untyped = make(files, { fsx: withEntries(files, USER_AGENTS, [{ name: 'bare', isDirectory: () => false }]) })
-    .resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!untyped.ok && untyped.reason === REASON.UNSUPPORTED_ENTRY,
-    'REFUSES an entry that does not expose the type methods (fail closed, no guessing)');
-
-  // A link in a PROJECT tree refuses too, even though user scope would otherwise resolve.
-  const projAgents = 'D:\\Workspace\\.claude\\agents';
-  const pfiles = {}; pfiles[USER_WS] = roleDoc('web-scout'); pfiles[projAgents + '\\keep.md'] = roleDoc('operator');
-  const projLink = make(pfiles, { fsx: withEntries(pfiles, projAgents, [linkEntry('nested')]) })
-    .resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(!projLink.ok && projLink.reason === REASON.LINKED_ENTRY, 'REFUSES a linked entry in a project-scope tree');
-
-  // Retained ordinary behaviour.
-  const ordinary = {}; ordinary[USER_AGENTS + '\\nested\\deep.md'] = roleDoc('web-scout');
-  ordinary[USER_AGENTS + '\\notes.txt'] = 'plain text, not markdown';
-  const okr = make(ordinary).resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(okr.ok === true && okr.scope === 'user',
-    'ordinary nested directories are still traversed and ordinary non-Markdown files still skipped');
 }
 
-section('NOT DEPLOYED / BAD INPUT');
+section('Managed scope');
 {
-  assert(make({}).resolve({ role: 'web-scout', cwd: SANDBOX }).reason === REASON.ROLE_NOT_DEPLOYED,
-    'REFUSES when the identity is not deployed anywhere');
-  const files = {}; files[USER_WS] = roleDoc('web-scout');
-  for (const bad of [{ role: '', cwd: SANDBOX }, { role: 'web-scout', cwd: '' }, {}, { role: 5, cwd: SANDBOX }]) {
-    assert(make(files).resolve(bad).reason === REASON.BAD_INPUT, 'REFUSES bad input: ' + JSON.stringify(bad));
+  const resolve = (fsx, probeRegistryKey = noManaged) => createRoleDefinitionResolver({
+    fsx, homeDir: os.tmpdir(), probeRegistryKey,
+  }).resolve({ role: 'web-scout' });
+  for (const p of DEFAULT_MANAGED_PATHS) {
+    assert(resolve({ existsSync: (name) => name === p }).reason === REASON.MANAGED_PRESENT,
+      'a managed path refuses before file lookup');
+  }
+  for (const key of DEFAULT_MANAGED_REGISTRY_KEYS) {
+    assert(resolve({ existsSync: () => false }, (name) => ({ present: name === key })).reason === REASON.MANAGED_PRESENT,
+      'a managed registry key refuses before file lookup');
+  }
+  assert(resolve({ existsSync() { throw new Error('EPERM'); } }).reason === REASON.MANAGED_UNREADABLE,
+    'a managed filesystem error refuses visibly');
+  for (const probe of [() => ({}), () => { throw new Error('EPERM'); }]) {
+    assert(resolve({ existsSync: () => false }, probe).reason === REASON.MANAGED_UNREADABLE,
+      'inconclusive managed registry checks refuse visibly');
+  }
+  assert(DEFAULT_MANAGED_PATHS.every((p) => !p.includes('ProgramData')), 'managed checks exclude the obsolete path');
+}
+
+section('All shipped roles resolve and serialize');
+{
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-deployed-roles-'));
+  const agents = path.join(home, '.claude', 'agents');
+  fs.mkdirSync(agents, { recursive: true });
+  const source = path.join(__dirname, '..', 'agent-roles');
+  const resolver = createRoleDefinitionResolver({
+    fsx: fs, homeDir: home, probeRegistryKey: noManaged, managedPaths: [], managedRegistryKeys: [],
+  });
+  try {
+    const echo = path.join(home, 'echo-argv.js');
+    fs.writeFileSync(echo, 'process.stdout.write(JSON.stringify(process.argv.slice(2)));');
+    for (const file of fs.readdirSync(source).filter((name) => name.endsWith('.md') && name !== 'README.md')) {
+      const role = path.basename(file, '.md');
+      const sourceText = fs.readFileSync(path.join(source, file), 'utf8');
+      const deployed = sourceText.replace('__CC_HOOK__', path.join(home, 'hook-file.js').replaceAll('\\', '/'));
+      fs.writeFileSync(path.join(agents, file), deployed);
+      const resolved = resolver.resolve({ role });
+      assert(resolved.ok && !/\s/.test(resolved.roleArg), role + ' produces one whitespace-free native argument');
+      if (resolved.ok && process.platform === 'win32') {
+        // Drive PowerShell 5.1's actual legacy native argument path. The fixture
+        // echoes argv and does not start Claude or call a provider.
+        const command = '& $env:MAKO_TEST_NODE $env:MAKO_TEST_ECHO --agents $env:' + ROLE_ARG_ENV
+          + (resolved.settingsArg ? ' --settings $env:' + ROLE_SETTINGS_ENV : '');
+        const output = execFileSync('powershell.exe', ['-NoProfile', '-Command', command], {
+          encoding: 'utf8',
+          env: { ...process.env, MAKO_TEST_NODE: process.execPath,
+            MAKO_TEST_ECHO: echo,
+            [ROLE_ARG_ENV]: resolved.roleArg, [ROLE_SETTINGS_ENV]: resolved.settingsArg || '' },
+        });
+        const argv = JSON.parse(output);
+        const agent = JSON.parse(argv[argv.indexOf('--agents') + 1])[role];
+        assert(agent.tools.length > 0 && agent.description && agent.prompt.trim(),
+          role + ' reaches the native process as the checked agent JSON');
+        if (resolved.settingsArg) {
+          const settings = JSON.parse(argv[argv.indexOf('--settings') + 1]);
+          assert(settings.hooks.PreToolUse[0].hooks[0].command.includes('/hook-file.js'),
+            role + ' carries the checked hook through the same argv boundary');
+        }
+      }
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
   }
 }
-
-section('REFUSAL REASONS ARE BOUNDED CONSTANTS');
-{
-  const all = Object.values(REASON);
-  const files = {}; files['C:\\Program Files\\ClaudeCode\\managed-settings.json'] = '{}';
-  const r = make(files, { managedPaths: ['C:\\Program Files\\ClaudeCode\\managed-settings.json'] })
-    .resolve({ role: 'web-scout', cwd: SANDBOX });
-  assert(all.indexOf(r.reason) !== -1 && r.reason.indexOf('\\') === -1 && r.reason.indexOf('Program') === -1,
-    'reason is a declared constant carrying no path');
-}
-
-process.stdout.write('\nrole-definition-resolver: ' + passed + ' passed, ' + failed + ' failed\n');
-process.exit(failed ? 1 : 0);
+process.stdout.write(`\nrole-definition-resolver: ${passed} passed, ${failed} failed\n`);
+process.exitCode = failed ? 1 : 0;

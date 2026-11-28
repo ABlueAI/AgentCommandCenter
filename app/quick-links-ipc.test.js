@@ -97,6 +97,9 @@ function harness(overrides = {}) {
     } });
     const wrong = { sender: {}, senderFrame: h.mainFrame };
     eq(h.ipc.handleListPresets(wrong).error, 'untrusted-sender', 'preset listing checks the sender');
+    for (const id of [null, {}, 'two words', 'x'.repeat(70)]) {
+      eq((await h.ipc.handleOpenPreset(h.trustedEvent, id)).error, 'invalid-id', 'invalid preset ID refuses at IPC');
+    }
     eq((await h.ipc.handleOpenPreset(wrong, 'preset-one')).error, 'untrusted-sender', 'preset launch checks the sender');
     eq(accesses, 0, 'a rejected sender cannot access the preset service');
     assert(h.ipc.handleListPresets(h.trustedEvent).ok, 'trusted sender can list presets');

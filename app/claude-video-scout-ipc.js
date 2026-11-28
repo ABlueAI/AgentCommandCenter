@@ -60,6 +60,10 @@ function createClaudeVideoScoutIpc({
     if (!trustedSenderGate.assess(event).ok || typeof req?.id !== 'string' || !PANE_ID.test(req.id)) {
       return { ok: false, error: 'Claude Video Scout refused this window or pane.' };
     }
+    if (typeof req !== 'object' || Array.isArray(req)
+        || Object.keys(req).some((key) => !['id', 'url', 'focus', 'settings'].includes(key))) {
+      return { ok: false, error: 'Invalid launch request for Claude Video Scout.' };
+    }
     if (active) return { ok: false, error: 'A Claude Video Scout run is already in progress.' };
     const url = validateVideoUrl(req.url);
     const parsed = url ? new URL(url) : null;

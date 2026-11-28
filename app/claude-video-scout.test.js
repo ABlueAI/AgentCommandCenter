@@ -761,6 +761,8 @@ test('IPC refuses credentials, ports, bad pane IDs and over-long focus before an
     [{ id: 'pty1', url: 'https://www.youtube.com:8443/watch?v=x' }, /YouTube or Vimeo/],
     [{ id: 'pty0', url }, /refused this window or pane/],
     [{ id: '../x', url }, /refused this window or pane/],
+    [{ id: 'pty1', url, extra: true }, /invalid launch request/i],
+    [{ id: 'pty1', url, settings: [] }, /settings must be an object/i],
     [{ id: 'pty1', url, focus: 'x'.repeat(2001) }, /too long/],
   ]) {
     assert.match(scout.run(good, req).error, message);

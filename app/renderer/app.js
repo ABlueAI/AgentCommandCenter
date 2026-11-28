@@ -2094,7 +2094,8 @@ async function launchReviewer(worktree) {
     initialPrompt = `Review the change set in ./${r.fileName} (this branch vs main, ${r.files} file(s)). Read that file, then report findings per your role instructions.`;
   } else {
     appendLog(`[reviewer] could not build diff for ${name}: ${(r && r.error) || 'unknown error'}\n`);
-    initialPrompt = 'The diff could not be generated automatically. Ask the human to paste the diff you should review.';
+    alert('Could not start Reviewer. ' + ((r && r.error) || 'The diff could not be generated.'));
+    return;
   }
   openInAppTerminal({ worktree, role: 'reviewer', cli: 'claude', initialPrompt, title: `Reviewer · ${name}` });
 }
@@ -2970,9 +2971,13 @@ async function createAgent() {
   }
 
   const needsWorktree = role === 'plain' || meta?.needsWorktree;
-  const task = input.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
+  // Task names become worktree folders and agent/<task> refs: refuse a bad name with its reason
+  // instead of rewriting it (main checks it again before using it).
+  const taskCheck = window.ccTaskName.validateTask($('#taskName').value);
+  const task = taskCheck.ok ? taskCheck.task : '';
+  const refuseTask = () => { alert(taskCheck.error); $('#taskName').focus(); };
   if (needsWorktree) {
-    if (!task) { $('#taskName').focus(); return; }
+    if (!taskCheck.ok) { refuseTask(); return; }
     closeModal();
   }
   try {
@@ -3053,7 +3058,7 @@ async function createAgent() {
     appendLog('[TIMING] createAgent: openInAppTerminal (builder)\n');
     openInAppTerminal({ worktree: res.worktree, role, cli: 'claude', model, effort, title: `${meta.label} · ${task}` });
   } else {
-    if (!task) { $('#taskName').focus(); return; }
+    if (!taskCheck.ok) { refuseTask(); return; }
     closeModal();
     // Web-Scout / Operator: run in a dedicated fenced sandbox outside any repo. Its
     // PreToolUse write-fence confines writes to this dir — it can't touch a repo.

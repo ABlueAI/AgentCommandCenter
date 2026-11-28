@@ -203,9 +203,9 @@ function hostRefusal(hostname) {
  */
 function validatePageUrl(raw) {
   if (typeof raw !== 'string') return { ok: false, reason: REASON.NOT_STRING };
+  if (raw.length > MAX_URL_LENGTH) return { ok: false, reason: REASON.TOO_LONG };
   const s = raw.trim();
   if (s === '') return { ok: false, reason: REASON.EMPTY };
-  if (s.length > MAX_URL_LENGTH) return { ok: false, reason: REASON.TOO_LONG };
   // eslint-disable-next-line no-control-regex
   if (/[\s\u0000-\u001f\u007f]/.test(s)) return { ok: false, reason: REASON.WHITESPACE };
   let u;
