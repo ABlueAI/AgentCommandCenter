@@ -292,7 +292,7 @@ fs.writeFileSync(path.join(USER_DATA, 'settings.json'), JSON.stringify({ project
 const ENTRY_URL = pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString();
 const record = { handled: new Map(), on: new Map(), spawnArgs: [], webContents: null };
 function electronStub() {
-  const wc = { mainFrame: { url: ENTRY_URL }, on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
+  const wc = { mainFrame: { url: ENTRY_URL }, on() {}, once() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
   record.webContents = wc;
   const w = new Proxy({ webContents: wc, isDestroyed: () => false, isMinimized: () => false }, { get(t, k) { return k in t ? t[k] : () => {}; } });
   class BrowserWindow { constructor() { return w; } static getAllWindows() { return []; } }

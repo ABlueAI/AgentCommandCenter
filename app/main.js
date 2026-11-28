@@ -1505,7 +1505,7 @@ ipcMain.handle('page-report-to-reviewer', async (e) => {
   }
   preparedReviewerDirs.add(dir);
   tlog('page-report-to-reviewer: report copied');
-  return { ok: true, dir, initialPrompt: pageReaderMod.REVIEWER_PROMPT };
+  return { ok: true, dir: sandbox.dir, initialPrompt: pageReaderMod.REVIEWER_PROMPT };
 });
 
 // FAIL-CLOSED fence check. The path-fence that confines web-scout/operator lives in the
