@@ -3,6 +3,37 @@
 
 const $ = (sel) => document.querySelector(sel);
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript', authority: window.ccAuthorityChoice.DEFAULT_LEVEL };
+const pendingPreferenceSaves = new Map();
+const preferenceSaveErrors = new Map();
+
+async function savePreference(key, value, label) {
+  const partial = { [key]: value };
+  pendingPreferenceSaves.set(key, partial);
+  let saved;
+  let reason = '';
+  try {
+    const result = await cc.saveSettings(partial);
+    saved = result && result.ok !== false && (result.ok === true || result[key] === value);
+    if (!saved) reason = (result && result.error) || 'save refused';
+  } catch (e) {
+    saved = false;
+    reason = (e && e.message) || String(e);
+  }
+  if (!saved) appendLog('[settings] could not save ' + key + ': ' + reason + '\n');
+  // An older reply must not overwrite the status of a newer change to the same preference.
+  if (pendingPreferenceSaves.get(key) !== partial) return;
+  pendingPreferenceSaves.delete(key);
+  if (saved) {
+    preferenceSaveErrors.delete(key);
+  } else {
+    const message = 'Could not save ' + label + '. The change may be lost when Mako restarts. Details in Logs.';
+    preferenceSaveErrors.set(key, message);
+  }
+  const banner = $('#preferenceSaveErrors');
+  banner.textContent = [...preferenceSaveErrors.values()].join(' ');
+  banner.classList.toggle('hidden', preferenceSaveErrors.size === 0);
+}
+
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 const quickLinksView = window.ccQuickLinksView.createQuickLinksView({
   document,
@@ -121,7 +152,10 @@ function applyTheme(name) {
   const sel = $('#themeSelect'); if (sel) sel.value = name;
   const t = xtermTheme();
   for (const x of terms.values()) { x.term.options.theme = t; } // re-theme live terminals
-  cc.saveSettings({ theme: name });
+}
+function changeTheme(name) {
+  applyTheme(name);
+  return savePreference('theme', state.theme, 'the theme');
 }
 function switchTab(name) {
   const log = $('#logView');
@@ -1491,7 +1525,7 @@ function fillGeneralSettings() {
   pick.id = 'makoThemeSelect';
   for (const o of Array.from(theme.options)) { const c = document.createElement('option'); c.value = o.value; c.textContent = o.textContent; pick.appendChild(c); }
   pick.value = theme.value;
-  pick.onchange = () => { applyTheme(pick.value); };
+  pick.onchange = () => changeTheme(pick.value);
   label.appendChild(pick);
   const folder = document.createElement('button');
   folder.type = 'button';
@@ -1827,13 +1861,21 @@ function setupTTSControls() {
     voiceSel.dataset.filled = '1';
     voiceSel.value = state.ttsVoice || tts.getVoice();
     tts.setVoice(voiceSel.value);
-    voiceSel.onchange = () => { tts.setVoice(voiceSel.value); state.ttsVoice = voiceSel.value; cc.saveSettings({ ttsVoice: voiceSel.value }); };
+    voiceSel.onchange = () => {
+      tts.setVoice(voiceSel.value);
+      state.ttsVoice = voiceSel.value;
+      return savePreference('ttsVoice', state.ttsVoice, 'the speech voice');
+    };
   }
   const speedSel = $('#ttsSpeed');
   if (speedSel) {
     speedSel.value = String(state.ttsSpeed || 1);
     tts.setSpeed(speedSel.value);
-    speedSel.onchange = () => { tts.setSpeed(speedSel.value); state.ttsSpeed = Number(speedSel.value); cc.saveSettings({ ttsSpeed: state.ttsSpeed }); };
+    speedSel.onchange = () => {
+      tts.setSpeed(speedSel.value);
+      state.ttsSpeed = Number(speedSel.value);
+      return savePreference('ttsSpeed', state.ttsSpeed, 'the speech speed');
+    };
   }
   const stopBtn = $('#ttsStop');
   if (stopBtn) stopBtn.onclick = () => tts.stop();
@@ -1892,9 +1934,9 @@ async function onRepoChange(repo) {
   refreshEmblemRail();
   github.disabled = !state.githubUrl;
   const agents = refreshAgents();
-  const saved = cc.saveSettings({ selectedRepo: repo }).catch((e) => {
-    appendLog(`[repositories] could not save the selection: ${e?.message || e}\n`);
-  });
+  // Saving the selection must not hold up repository data or startup's control wiring.
+  // savePreference logs and shows its own failure, so nothing here waits on it.
+  void savePreference('selectedRepo', repo, 'the selected repository');
   let url = '';
   try {
     if (repo) url = await cc.repoGithubUrl(repo);
@@ -1905,7 +1947,7 @@ async function onRepoChange(repo) {
     state.githubUrl = url;
     github.disabled = !url;
   }
-  await Promise.all([saved, agents]);
+  await agents;
 }
 
 // ---- agents -----------------------------------------------------------------
@@ -1931,8 +1973,8 @@ async function refreshAgents() {
   appendLog(`[TIMING] refreshAgents: listWorktrees END (${all.length} items)\n`);
   if (generation !== worktreeRefreshGeneration || repo !== state.repo) return;
   agentRefreshFailedFor = '';
-  // The first worktree is the main checkout; the rest are agents.
-  state.worktrees = all.filter((w) => !w.branch || w.branch !== 'main');
+  // Git lists the primary checkout first, regardless of its branch.
+  state.worktrees = all.slice(1);
   branchStatusNodes = new Map();
   renderAgentList();
   renderAgentGrid();
@@ -2173,7 +2215,7 @@ function appendLog(text) {
 // ---- wiring -----------------------------------------------------------------
 function wireUi() {
   $('#repoSelect').onchange = (e) => onRepoChange(e.target.value);
-  $('#themeSelect').onchange = (e) => applyTheme(e.target.value);
+  $('#themeSelect').onchange = (e) => changeTheme(e.target.value);
   {
     // S10: one click sets the authority for every Claude pane started after it (not running ones).
     const sel = $('#authoritySelect');

@@ -176,7 +176,8 @@ const event = (extra = {}) => ({ preventDefault: noop, stopPropagation: noop, ..
 test('#234 late repository responses cannot replace the current cards or link', async () => {
   const slowTrees = deferred();
   const slowUrl = deferred();
-  const worktrees = (repo) => [{ path: repo + '/agent', branch: 'agent' }];
+  // Git lists the primary checkout first (this PR's rule, #356), then the agents.
+  const worktrees = (repo) => [{ path: repo, branch: 'main' }, { path: repo + '/agent', branch: 'agent' }];
   const env = setup({
     listWorktrees: async (repo) => repo === 'A' ? slowTrees.promise : worktrees(repo),
   });
@@ -201,7 +202,7 @@ test('#234 late repository responses cannot replace the current cards or link', 
   const slowSameRepo = deferred();
   env.cc.listWorktrees = () => slowSameRepo.promise;
   const oldRefresh = env.evaluate('refreshAgents()');
-  env.cc.listWorktrees = async () => [{ path: 'B/new', branch: 'new' }];
+  env.cc.listWorktrees = async () => [{ path: 'B', branch: 'main' }, { path: 'B/new', branch: 'new' }];
   await env.evaluate('refreshAgents()');
   slowSameRepo.resolve(worktrees('B'));
   await oldRefresh;
