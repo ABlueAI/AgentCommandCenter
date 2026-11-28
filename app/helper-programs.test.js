@@ -3,7 +3,19 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { test } = require('node:test');
+let passed = 0;
+let failed = 0;
+
+function test(label, check) {
+  try {
+    check();
+    passed += 1;
+    process.stdout.write(`  ✓ ${label}\n`);
+  } catch (error) {
+    failed += 1;
+    process.stderr.write(`  ✗ FAIL: ${label}\n${error.stack}\n`);
+  }
+}
 
 function productionSources(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -141,3 +153,6 @@ test('the boundary launches this runtime and round-trips argv without shell pars
   ], { encoding: 'utf8' });
   assert.deepEqual(JSON.parse(stdout), args);
 });
+
+process.stdout.write(`\nhelper-programs: ${passed} passed, ${failed} failed\n`);
+process.exitCode = failed ? 1 : 0;
