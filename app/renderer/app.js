@@ -755,6 +755,8 @@ function openInAppTerminal(opts = {}) {
       }, { completedLinesOnly: true, maxPendingChars: 4096 })
     : null;
   const paneData = { term, fit, pane, ro, roConnected: true, role, usageParser };
+  // S20: what the aquarium's creature and crew row show for this pane (text only).
+  paneData.aquarium = { label, repo: aquariumRepoLabel() };
   // The ONE close path for this pane. Extracted from the close button's handler (behaviour and
   // ordering are unchanged) and made IDEMPOTENT so that a second caller cannot double-kill a PTY or
   // double-dispose an xterm. On the Dockview prototype branch a panel-removal event is that second
@@ -789,6 +791,7 @@ function openInAppTerminal(opts = {}) {
     else cc.ptyKill(id);
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
+    aquariumRefresh();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
   // Undo everything this function built in the RENDERER, for the window in which no PTY exists yet.
@@ -805,6 +808,7 @@ function openInAppTerminal(opts = {}) {
     if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
+    aquariumRefresh();
   };
   paneData.closePane = closeThisPane;
   pane.querySelector('.x').onclick = closeThisPane;
@@ -814,6 +818,7 @@ function openInAppTerminal(opts = {}) {
   });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
+  aquariumRefresh();
 
   // ---- TERMINAL LAUNCH TRANSACTION -------------------------------------------------------------
   // ORDER IS LOAD-BEARING: dock FIRST, start the PTY only once the dock has succeeded.
@@ -1587,12 +1592,142 @@ function startShell(settings) {
     emblemRail = null;
     appendLog('[shell] REFUSED: the repo emblem rail did not start (rail-start-failed); use the repo picker\n');
   }
+  startAquarium();
   // Coming back to the control room: its terminals were display:none, so refit the classic grid
   // (docked panes refit through their own observers).
   window.addEventListener('mako-shell-change', (e) => {
     const d = e.detail || {};
     if (d.view === 'tab' && (d.layout === 'old' || d.tab === 'control')) setTimeout(fitAllTerms, 0);
   });
+}
+
+// ---- S20: the aquarium tab (aquarium.js, on aquarium-engine.js) -----------------------------------
+// One creature per live pane, in its pane-status colour; a click on a creature or its crew row opens
+// that pane in the control room. The aquarium reads each pane's id, title, repo, role and
+// pane-status state, and never writes to a pane. The tank draws only while the aquarium tab shows
+// and the window is visible.
+let aquarium = null;
+const aquariumStatus = new Map(); // paneId -> pane-status state word
+function aquariumRepoLabel() {
+  const sel = $('#repoSelect');
+  const o = sel && sel.selectedOptions && sel.selectedOptions[0];
+  return o && o.value ? o.textContent : '';
+}
+function aquariumPanes() {
+  const out = [];
+  for (const [id, t] of terms) {
+    const a = t.aquarium || {};
+    out.push({ id, title: a.label || id, repo: a.repo || '', role: t.role || '', status: aquariumStatus.get(id) || 'unknown' });
+  }
+  return out;
+}
+// A refusal's fixed kind (aquarium.js sets `kind` on what it throws); anything else is the
+// fallback. An exception's own text is never echoed.
+function aquariumKind(e, fallback) {
+  return e && typeof e.kind === 'string' && /^[a-z0-9-]{1,40}$/.test(e.kind) ? e.kind : fallback;
+}
+let aquariumSync = () => {}; // names the tank and shows or hides it; set by startAquarium
+let aquariumUpdateFailed = null; // the last update failure's kind, logged once until an update works
+function aquariumRefresh() {
+  for (const id of Array.from(aquariumStatus.keys())) if (!terms.has(id)) aquariumStatus.delete(id);
+  if (!aquarium) return;
+  try {
+    aquarium.update(aquariumPanes());
+    aquariumUpdateFailed = null;
+  } catch (e) {
+    const kind = aquariumKind(e, 'update-failed');
+    if (aquariumUpdateFailed !== kind) {
+      aquariumUpdateFailed = kind;
+      appendLog(`[aquarium] REFUSED: the tank could not update (${kind}); the crew list may be out of date\n`);
+    }
+  }
+}
+function aquariumNoteStatus(view) {
+  if (!aquarium || !view || typeof view.paneId !== 'string' || !view.paneId) return;
+  aquariumStatus.set(view.paneId, typeof view.state === 'string' ? view.state : 'unknown');
+  aquariumRefresh();
+}
+// Bring a pane into view in the control room: switch it to its Terminals view, un-maximize another
+// pane or bring a docked pane's tab forward, then focus it. Throws a refusal with a kind if the pane can't be shown.
+function aquariumRevealPane(id) {
+  if (!terms.has(id)) { const e = new Error('pane-closed'); e.kind = 'pane-closed'; throw e; }
+  shell.setTab('control');
+  // The control room's own Terminals view (it may be on Agents, Library or Logs).
+  switchTab('terminals');
+  if (paneIsDocked(id)) {
+    let panel = null;
+    try { panel = layoutInstance.api().getPanel(id); } catch { panel = null; }
+    if (!panel || !panel.api || typeof panel.api.setActive !== 'function') { const e = new Error('panel-missing'); e.kind = 'panel-missing'; throw e; }
+    panel.api.setActive();
+    // Dockview leaves a maximized group when another becomes active: keep the ⛶/🗗 buttons true.
+    refreshDockedMaximizeGlyphs();
+  } else if (paneMaximizer.maximizedId && paneMaximizer.maximizedId !== id) {
+    paneMaximizer.restore('aquarium-open');
+  }
+  const t = terms.get(id);
+  activeTermId = id;
+  // Focus is a convenience: a pane closed in between simply isn't focused.
+  setTimeout(() => { try { t.term.focus(); } catch { /* pane gone: nothing to focus */ } }, 0);
+}
+function aquariumShowing() {
+  if (!shell || document.hidden) return false;
+  const st = shell.getState();
+  return st.layout === 'tabs' && st.view === 'tab' && st.tab === 'aquarium';
+}
+function startAquarium() {
+  const frame = $('#makoPanel-aquarium');
+  const host = frame && frame.querySelector('.mk-frame-main');
+  // A refusal is shown on the tab itself (replacing S66's placeholder) as well as in the log.
+  const refuse = (kind) => {
+    appendLog(`[aquarium] REFUSED: the aquarium tab did not start (${kind}); your agents are in the control room\n`);
+    if (!host) return;
+    const note = host.querySelector('.mk-frame-note');
+    if (note) {
+      note.textContent = `The aquarium didn't start (${kind}). Your agents are in the control room.`;
+      note.setAttribute('id', 'makoAquariumRefused');
+    }
+  };
+  if (!host || !window.ccAquarium || !window.ccAquariumEngine || !window.ccUiTokens) {
+    refuse('aquarium-module-missing');
+    return;
+  }
+  const reduced = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  try {
+    aquarium = window.ccAquarium.createAquarium({
+      doc: document, host, engine: window.ccAquariumEngine, tokens: window.ccUiTokens,
+      log: (line) => appendLog(line),
+      prefersReducedMotion: () => !!(reduced && reduced.matches),
+      onOpenPane: (id) => aquariumRevealPane(id),
+    });
+  } catch (e) {
+    aquarium = null;
+    refuse(aquariumKind(e, 'start-failed'));
+    return;
+  }
+  const frameNote = host.querySelector('.mk-frame-note');
+  if (frameNote) frameNote.remove();
+  // A failure here is logged, never thrown into boot() or an event listener.
+  aquariumSync = () => {
+    if (!aquarium) return;
+    try {
+      aquarium.setTankName(aquariumRepoLabel());
+      aquarium.setShown(aquariumShowing());
+    } catch (e) {
+      appendLog(`[aquarium] REFUSED: the tank could not show or hide (${aquariumKind(e, 'sync-failed')})\n`);
+    }
+  };
+  const sync = () => aquariumSync();
+  window.addEventListener('mako-shell-change', sync);
+  document.addEventListener('visibilitychange', sync);
+  window.addEventListener('resize', () => {
+    if (!aquarium || !aquariumShowing()) return;
+    try { aquarium.resize(); }
+    catch (e) { appendLog(`[aquarium] REFUSED: the tank could not resize (${aquariumKind(e, 'resize-failed')})\n`); }
+  });
+  const repoSel = $('#repoSelect');
+  if (repoSel) repoSel.addEventListener('change', sync);
+  aquariumRefresh();
+  sync();
 }
 
 async function boot() {
@@ -1697,6 +1832,7 @@ const paneStatusSetup = (window.ccPaneStatus && window.ccPaneStatusBadge)
   : null;
 if (paneStatusBadge) {
   window.ccPaneStatus.onView((view) => {
+    aquariumNoteStatus(view);
     const shown = paneStatusBadge.update(view);
     if (shown && view && view.paneId) {
       appendLog(`[pane-status] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);
@@ -1938,6 +2074,7 @@ async function onRepoChange(repo) {
   }
   if (shell) shell.refreshScope();   // S66: the scope stripe names the repo in use
   refreshEmblemRail();
+  aquariumSync();                     // S20: the tank is named after the repo in use
   github.disabled = !state.githubUrl;
   const agents = refreshAgents();
   // Saving the selection must not hold up repository data or startup's control wiring.
