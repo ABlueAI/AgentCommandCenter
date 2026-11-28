@@ -219,8 +219,8 @@ const html = read('index.html');
   assert(!/role\s*===|video-scout/.test(block), 'no role-conditional branch in the copy path — Video Scout goes through the SAME code');
   assert(block.includes('resolveCopyRequest'), 'copy click resolves through the exported resolveCopyRequest');
   assert(block.includes('term.buffer.active') && block.includes('COPY_OUTPUT_BOUND'), 'reconstruction reads the live xterm buffer under the exported bound');
-  assert(block.includes('selectionAtCopyPointerDown = selectedTextInPane() || speakSelectionMemory.peek()'),
-    'pointer-down snapshot preserved (selection survives the header-button click)');
+  assert(block.includes('selection: selectedTextInPane()') && !block.includes('speakSelectionMemory'),
+    'the pointer-down snapshot reads live selection independently of Speak');
   const logs = (block.match(/appendLog\(/g) || []).length;
   const metaLogs = (block.match(/appendLog\(window\.ccTermCopy\.buildCopyLogLine\(/g) || []).length;
   assert(logs > 0 && logs === metaLogs, 'EVERY Logs write in the copy path goes through the metadata-only builder (no text can leak)');
