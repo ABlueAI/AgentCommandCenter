@@ -3,7 +3,11 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-27 by the PR sweeper's second status PR of the day (covers main up to c50b569:
+Updated 2026-11-27 by the PR sweeper's third status PR of the day (covers main up to 365dd26:
+PR #352, Codex's CI audit; PR #359, Video Scout's Logs copies only the exact usage line (#358);
+verified: GitHub's REST API, read 2026-11-27 about 17:15 UTC, shows them merged 2026-11-27 16:17
+and 16:18 UTC in that order). Before that: updated 2026-11-27 by the PR sweeper's second status PR
+of the day, PR #367 (covers main up to c50b569:
 PR #302, S69's Trail of Bits patterns in security-reviewer; PR #315, account guard line endings
 and PowerShell deny rules; PR #288, S62's tree and merged-work history data; PR #327, the fence
 hook's page-reader host rule; PR #339, D-091 and D-092 in the rules (Claude's review alone while
@@ -125,6 +129,9 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
   with severity and a fix idea; security rows give a title and severity only. Codex PR #336
   (issue #329, confirm before removing a worktree), open as of 2026-11-27 05:15 UTC, takes the main
   audit's first high row (verified: GitHub's REST API for #336 and #329, and the audit's line 9).
+  PR #352 (merged 2026-11-27) adds `docs/audits/codex-ci-2026-11.md`, the CI workflow audit at
+  `1b23fc8`, in the same form. PR #359 (merged 2026-11-27) fixes the renderer audit's security row
+  "Video Scout log handling" (medium; issue #358, closed; verified: GitHub's REST API for #358).
 - **Session hygiene (S46, PR #286, merged 2026-11-27):** every recorded Claude session has an
   owner, a state and a "done when"; finished sessions archive themselves; the Terminals tab shows
   a once-a-day list of sessions idle 3 days or more. Its "Done when" still needs Blue's PC check
