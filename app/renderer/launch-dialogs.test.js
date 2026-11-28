@@ -98,6 +98,8 @@ function renderer(ipc = {}) {
     ResizeObserver: class { observe() {} disconnect() {} },
     PtyParser: class {},
     setTimeout: noop, // Skip the unrelated post-launch terminal refit.
+    // main's log view (#308) batches writes per frame; flush at once so the tests read the log.
+    requestAnimationFrame: (fn) => { fn(); return null; },
     document: { addEventListener: noop, querySelector: control, querySelectorAll: () => [], createElement: (tag) => new Element(tag) },
     alert: (message) => alerts.push(message),
     window: {
