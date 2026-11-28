@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('cc', {
   usageRead: () => ipcRenderer.invoke('usage-read'),
 
   // in-app terminals (node-pty)
+  openTerminalLink: (u) => ipcRenderer.invoke('open-terminal-link', u),
   tlogReset: () => ipcRenderer.invoke('tlog-reset'),
   ptyStart: (o) => ipcRenderer.invoke('pty-start', o),
   claudeVideoScoutRun: (req) => ipcRenderer.invoke('claude-video-scout-run', req),
@@ -57,6 +58,10 @@ contextBridge.exposeInMainWorld('cc', {
   // S09 Resume or Start fresh: what main offers to resume, and "don't offer this one again".
   sessionResumeOffer: () => ipcRenderer.invoke('session-resume-offer'),
   sessionResumeDismiss: (sessionId) => ipcRenderer.invoke('session-resume-dismiss', sessionId),
+  // S46 session hygiene: every recorded session's owner, state, done-when and idle time, and setting a
+  // session's done-when.
+  sessionHygieneList: () => ipcRenderer.invoke('session-hygiene-list'),
+  sessionHygieneDoneWhen: (sessionId, text) => ipcRenderer.invoke('session-hygiene-done-when', sessionId, text),
   ptyWrite: (id, data) => ipcRenderer.send('pty-write', { id, data }),
   ptyResize: (id, cols, rows) => ipcRenderer.send('pty-resize', { id, cols, rows }),
   ptyKill: (id) => ipcRenderer.send('pty-kill', id),

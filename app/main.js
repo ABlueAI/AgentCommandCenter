@@ -150,6 +150,7 @@ const { createQuickLinksPresets } = require('./quick-links-presets');
 const { createQuickLinksStore } = require('./quick-links-store');
 const sessionMemoryMod = require('./session-memory');
 const sessionResume = require('./session-resume');
+const sessionHygiene = require('./session-hygiene');
 const { createQuickLinksIpc } = require('./quick-links-ipc');
 const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQuickLinkUrl } = require('./quick-links-policy');
 // S06: the legacy open-external channel goes through the same URL policy (open-external-ipc.js).
@@ -379,6 +380,10 @@ function validateVideoUrl(url) {
 }
 
 // ---- tiny settings store (userData/settings.json) ---------------------------
+const SETTING_KEYS = new Set([
+  'projectsRoot', 'selectedRepo', 'theme', 'ttsVoice', 'ttsSpeed', 'authority',
+  'uiLayout', 'uiTab', 'uiQuietSince', 'uiPausedSince',
+]);
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 function loadSettings() {
   try { return JSON.parse(fs.readFileSync(settingsPath(), 'utf8')); }
@@ -393,31 +398,87 @@ function saveSettings(s) { fs.writeFileSync(settingsPath(), JSON.stringify(s, nu
 // it; it never crosses the IPC boundary back to the renderer.
 const securePath = () => path.join(app.getPath('userData'), 'secure.json');
 function loadSecure() {
-  try { return JSON.parse(fs.readFileSync(securePath(), 'utf8')); }
-  catch { return {}; }
+  const file = securePath();
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); }
+  catch (err) {
+    if (err?.code === 'ENOENT') return {};
+    throw err;
+  }
+  const store = JSON.parse(text);
+  if (!store || typeof store !== 'object' || Array.isArray(store)) {
+    throw new TypeError('secure.json must contain a JSON object');
+  }
+  return store;
 }
-function saveSecure(s) { fs.writeFileSync(securePath(), JSON.stringify(s)); }
+
+function saveSecure(s) {
+  const file = securePath();
+  const text = JSON.stringify(s);
+  const temp = `${file}.${crypto.randomUUID()}.tmp`;
+  const fd = fs.openSync(temp, 'wx', 0o600);
+  // The original remains in place until the staged file has been written, flushed and closed.
+  try {
+    try { fs.writeFileSync(fd, text, { encoding: 'utf8', flush: true }); }
+    finally { fs.closeSync(fd); }
+    fs.renameSync(temp, file);
+  } catch (err) {
+    try { fs.rmSync(temp, { force: true }); }
+    catch { tlog('[secure] could not remove the temporary secure.json file'); }
+    throw err;
+  }
+}
+
+// Startup credential notices run before the window exists, so sendMainLog would drop them. They are
+// logged at once and queued here; createWindow sends them on main-error once the page has loaded.
+const credentialNotices = [];
+function noteCredential(line) { tlog(line); credentialNotices.push(line); }
+function flushCredentialNotices(send) {
+  while (credentialNotices.length) send(credentialNotices.shift());
+}
+// A bounded reason for an unreadable store: a short error code or a fixed phrase, never the error's
+// own message (a JSON parse message quotes the file's text).
+function secureStoreReason(err) {
+  if (err && typeof err.code === 'string' && /^[A-Z][A-Z0-9_]{0,31}$/.test(err.code)) return err.code;
+  if (err && err.name === 'SyntaxError') return 'not valid JSON';
+  if (err && err.name === 'TypeError') return 'not a JSON object';
+  return 'unknown error';
+}
 
 let geminiKey = null; // decrypted GEMINI_API_KEY; null = not configured
 // S06: decrypted ABlueAgent GitHub token (checklist step 14); null = not configured. Same store and
 // rules as the Gemini key: ciphertext on disk, plaintext only in main memory and agent pane envs.
 let agentGitToken = null;
-function loadAgentGitToken() {
-  if (!safeStorage.isEncryptionAvailable()) return;
-  const s = loadSecure();
+function loadAgentGitToken(s) {
   if (!s.agentGitTokenEnc) return;
   try {
     const t = safeStorage.decryptString(Buffer.from(s.agentGitTokenEnc, 'base64'));
     agentGitToken = isAgentToken(t) ? t : null;
-  } catch { tlog('[agent-git] stored ABlueAgent token unreadable (different OS user?); agent panes use your own git login'); }
+  } catch { noteCredential('[agent-git] stored ABlueAgent token unreadable (different OS user?); agent panes use your own git login'); }
 }
 
-function loadGeminiKey() {
-  if (!safeStorage.isEncryptionAvailable()) return;
-  const s = loadSecure();
+function loadGeminiKey(s) {
   if (!s.geminiKeyEnc) return;
   try { geminiKey = safeStorage.decryptString(Buffer.from(s.geminiKeyEnc, 'base64')); }
-  catch { /* ciphertext unreadable (different OS user / key rotation) — leave null */ }
+  catch { noteCredential('[gemini] stored Gemini key could not be decrypted'); }
+}
+
+function loadStoredCredentials() {
+  if (!safeStorage.isEncryptionAvailable()) return;
+  let store;
+  try { store = loadSecure(); }
+  catch (err) {
+    const reason = secureStoreReason(err);
+    noteCredential(`[secure] could not read secure.json (${reason}); stored credentials were not loaded`);
+    dialog.showErrorBox('Credential store unavailable',
+      `Mako could not read secure.json (${reason}) in ${path.dirname(securePath())}. ` +
+      'Stored credentials were not loaded, and saving or clearing a credential is refused until the store is readable. ' +
+      'If the file is locked, close the program holding it and restart Mako. To start over, close Mako, ' +
+      'rename secure.json (for example to secure.json.bad), restart Mako and enter the Gemini key and the ABlueAgent token again.');
+    return;
+  }
+  loadGeminiKey(store);
+  loadAgentGitToken(store);
 }
 
 let win = null;
@@ -431,6 +492,7 @@ const paneStatusNotifications = createPaneStatusNotifications({
 // never drift apart (independently reconstructed path/origin strings are how they would).
 const ENTRY_PATH = path.join(__dirname, 'renderer', 'index.html');
 const ENTRY_URL = pathToFileURL(ENTRY_PATH).toString();
+const launcherGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
 // The only production PTY write primitive. Its admitted closure holds a module-private capability;
 // generic IPC can never manufacture that capability from renderer-controlled data.
@@ -547,6 +609,10 @@ function createWindow() {
     const sameDocument = details?.isSameDocument ?? isInPlace;
     if (mainFrame && !sameDocument) claudeScout.shutdown();
   });
+  // Startup credential notices (loadStoredCredentials) wait for the page, then go to the Logs tab.
+  win.webContents.once('did-finish-load', () => flushCredentialNotices((line) => {
+    if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+  }));
   win.loadFile(ENTRY_PATH);
 
   // --- Navigation lockdown (AUDIT #3 / electronegativity LIMIT_NAVIGATION HIGH) -----------------
@@ -573,10 +639,11 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  loadGeminiKey(); // decrypt stored GEMINI_API_KEY into memory before any PTY can launch
-  loadAgentGitToken(); // S06: the ABlueAgent token, likewise before any PTY can launch
+  loadStoredCredentials(); // decrypt stored credentials before any PTY can launch
   // S08: a record still open now was never closed (a crash or a forced kill): close it as `unknown`.
   sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.UNKNOWN));
+  // S46: finished sessions archive themselves.
+  sessionMemoryCall(() => sessionMemory().archiveFinished());
   // K8 media-permission hardening: grant ONLY a microphone-only request ('media' with
   // mediaTypes exactly ['audio']) coming from this window's main frame at the exact
   // entry document with the trusted file: origin — the in-app Whisper dictation path.
@@ -1051,9 +1118,8 @@ function tlog(msg) {
 // Call at the start of each createAgent attempt to reset the clock.
 function tlogReset() { _t0 = Date.now(); tlog('--- new createAgent sequence ---'); }
 
-// Resolve the real (symlink-free) path. Walks up to the nearest existing ancestor when the
-// target doesn't exist yet — mirrors scripts/hooks/fence-write.js so the main-process cwd
-// guard and the hook use identical resolution logic and cannot be diverged by path tricks.
+// Resolve paths for the launcher's working-directory checks. The tool hook independently
+// validates file paths at the point of use.
 function realOrNearest(p) {
   try { return fs.realpathSync.native(p); }
   catch {
@@ -1073,11 +1139,32 @@ function remoteToHttps(remote) {
 }
 
 // ---- IPC: repos & settings --------------------------------------------------
-ipcMain.handle('get-settings', async () => loadSettings());
+function reportIpcRefusal(channel, reason) {
+  const message = `${channel} refused: ${reason}`;
+  tlog(message);
+  if (win && !win.isDestroyed()) win.webContents.send('main-error', message);
+  return message;
+}
+
+function ipcSenderRefusal(channel, event) {
+  const sender = launcherGate.assess(event);
+  return sender.ok ? null : reportIpcRefusal(channel, sender.reason);
+}
+
+// These invokes have different success shapes. A refused sender receives a rejected invoke.
+function handleTrustedIpc(channel, handler) {
+  ipcMain.handle(channel, (event, ...args) => {
+    const refusal = ipcSenderRefusal(channel, event);
+    if (refusal) throw new Error(refusal);
+    return handler(...args);
+  });
+}
+
+handleTrustedIpc('get-settings', async () => loadSettings());
 // Build identity for the Terminals bar and window title (build-info.js): this checkout's version,
 // branch and commit, read once on first request. Non-sensitive by construction.
 let buildInfoPromise = null;
-ipcMain.handle('build-info', () => {
+handleTrustedIpc('build-info', () => {
   if (!buildInfoPromise) {
     buildInfoPromise = readBuildInfo({
       version: require('./package.json').version,
@@ -1087,7 +1174,13 @@ ipcMain.handle('build-info', () => {
   }
   return buildInfoPromise;
 });
-ipcMain.handle('save-settings', async (_e, partial) => {
+handleTrustedIpc('save-settings', async (partial) => {
+  if (!partial || typeof partial !== 'object' || Array.isArray(partial)) {
+    throw new Error(reportIpcRefusal('save-settings', 'invalid-settings-patch'));
+  }
+  if (Object.keys(partial).some((key) => !SETTING_KEYS.has(key))) {
+    throw new Error(reportIpcRefusal('save-settings', 'unknown-setting'));
+  }
   const s = { ...loadSettings(), ...partial };
   saveSettings(s);
   return s;
@@ -1096,11 +1189,10 @@ ipcMain.handle('save-settings', async (_e, partial) => {
 // ---- IPC: Gemini key management (safeStorage) --------------------------------
 // The renderer can check whether a key is stored and save a new value, but the
 // plaintext never travels back across the IPC boundary — it stays in main memory.
-ipcMain.handle('tlog-reset', () => { tlogReset(); });
+handleTrustedIpc('tlog-reset', () => { tlogReset(); });
 
 // Issue #161: trusted sender first (the same gate as the ABlueAgent token channels), then the
-// store; every refusal shows on the main-error channel (gemini-key-ipc.js). `launcherGate` is
-// defined further down and is only read when a call arrives, after startup has finished.
+// store; every refusal shows on the main-error channel (gemini-key-ipc.js).
 const geminiKeyIpc = createGeminiKeyIpc({
   assessSender: (e) => launcherGate.assess(e),
   isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
@@ -1115,13 +1207,13 @@ ipcMain.handle('get-gemini-key-status', (e) => geminiKeyIpc.handleStatus(e));
 ipcMain.handle('set-gemini-key', (e, key) => geminiKeyIpc.handleSet(e, key));
 ipcMain.handle('clear-gemini-key', (e) => geminiKeyIpc.handleClear(e));
 
-ipcMain.handle('pick-folder', async () => {
+handleTrustedIpc('pick-folder', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
   return r.canceled ? null : r.filePaths[0];
 });
 
 // List immediate sub-folders of projectsRoot that are git repos.
-ipcMain.handle('list-repos', async () => {
+handleTrustedIpc('list-repos', async () => {
   const s = loadSettings();
   let repos = [];
   try {
@@ -1133,7 +1225,7 @@ ipcMain.handle('list-repos', async () => {
 });
 
 // Parse `git worktree list --porcelain` into [{path, branch}] — these are your live agents.
-ipcMain.handle('list-worktrees', async (_e, repo) => {
+handleTrustedIpc('list-worktrees', async (repo) => {
   if (!repo) return [];
   tlog('list-worktrees: git worktree list START');
   const out = await git(['worktree', 'list', '--porcelain'], repo);
@@ -1150,11 +1242,11 @@ ipcMain.handle('list-worktrees', async (_e, repo) => {
   return items;
 });
 
-ipcMain.handle('repo-github-url', async (_e, repo) => remoteToHttps(await git(['remote', 'get-url', 'origin'], repo)));
+handleTrustedIpc('repo-github-url', async (repo) => remoteToHttps(await git(['remote', 'get-url', 'origin'], repo)));
 
 // ---- IPC: agents ------------------------------------------------------------
 // Create a worktree (via the repo's own new-agent.ps1) and launch the chosen agent in a WT tab.
-ipcMain.handle('new-agent', async (_e, { repo, task }) => {
+handleTrustedIpc('new-agent', async ({ repo, task }) => {
   // Refuse a malformed task BEFORE building any path or spawning powershell (finding #4). A
   // bypassed renderer can send anything; never silently sanitize — surface the reason and stop.
   const taskCheck = validateTask(task);
@@ -1187,7 +1279,7 @@ ipcMain.handle('new-agent', async (_e, { repo, task }) => {
 });
 
 // Tear down an agent's worktree (branch is preserved by the script).
-ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
+handleTrustedIpc('remove-agent', async ({ repo, task }) => {
   // Re-validate here INDEPENDENTLY of new-agent — not redundant paranoia. new-agent validates a
   // name the user is typing right now; this path validates a name read back out of PERSISTENT,
   // possibly-hostile state: `task` is taskOf(wt), derived from a worktree folder/branch that may
@@ -1224,7 +1316,7 @@ ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
 // Create a dedicated, fenced outputs sandbox for a research role (web-scout/operator) so it
 // runs OUTSIDE any repo. The role launches with cwd = this dir, and its PreToolUse write-fence
 // confines writes to here — it cannot touch a repo even though it has the Write tool.
-ipcMain.handle('ensure-output-dir', async (_e, { role }) => createOutputSandbox(role));
+handleTrustedIpc('ensure-output-dir', async ({ role }) => createOutputSandbox(role));
 
 async function createOutputSandbox(role) {
   tlog(`ensure-output-dir: START role="${role}"`);
@@ -1412,7 +1504,7 @@ ipcMain.handle('page-report-to-reviewer', async (e) => {
 // sense of containment is worse than none. So before launching a fenced role we verify the
 // fence is really installed AND actually gates Read (not just Write/Edit — Blue Helm
 // checklist P1), and refuse to launch if either is missing (renderer shows the reason).
-ipcMain.handle('verify-fence', async (_e, { role }) => {
+handleTrustedIpc('verify-fence', async ({ role }) => {
   tlog(`verify-fence: START role="${role}"`);
   if (!VALID_ROLES.has(role)) return { ok: false, error: 'unknown role' };
   // NOT AN ENFORCEMENT POINT — EARLY RENDERER FEEDBACK ONLY. `pty-start` never calls this handler,
@@ -1436,15 +1528,27 @@ ipcMain.handle('verify-fence', async (_e, { role }) => {
 // Build a review diff for a worktree (this branch vs main, including uncommitted work) and
 // write it to .agent-review.diff in that worktree so the read-only Reviewer can Read it —
 // the Reviewer has no shell, so the launcher produces the diff for it (Blue Helm spec §2).
-ipcMain.handle('review-diff', async (_e, { worktree, base }) => {
-  base = base || 'main';
-  if (!worktree || !fs.existsSync(worktree)) return { ok: false, error: 'worktree not found' };
-  const diff = await new Promise((resolve) => {
-    execFile('git', ['-C', worktree, 'diff', base], { maxBuffer: 1024 * 1024 * 32 },
-      (_err, stdout) => resolve(stdout || ''));
+handleTrustedIpc('review-diff', async (request) => {
+  const { worktree, base = 'main' } = request || {};
+  if (typeof base !== 'string' || !base || base.startsWith('-') || base.includes('\0')) {
+    return { ok: false, error: 'invalid-base-ref' };
+  }
+  // Let Git check the complete ref grammar, including slash-separated names and single names.
+  const refError = await new Promise((resolve) => {
+    execFile('git', ['check-ref-format', '--allow-onelevel', base], { windowsHide: true }, resolve);
   });
+  if (refError) {
+    return { ok: false, error: refError.code === 1 ? 'invalid-base-ref' : 'git-ref-check-failed' };
+  }
+  const authorized = launcherAuthorizer.authorize(worktree);
+  if (!authorized.ok) return { ok: false, error: authorized.reason };
+  const { error, diff } = await new Promise((resolve) => {
+    execFile('git', ['-C', authorized.dir, 'diff', '--end-of-options', base, '--'],
+      { maxBuffer: 1024 * 1024 * 32 }, (error, diff) => resolve({ error, diff }));
+  });
+  if (error) return { ok: false, error: 'git-diff-failed' };
   const fileName = '.agent-review.diff';
-  const file = path.join(worktree, fileName);
+  const file = path.join(authorized.dir, fileName);
   if (!diff.trim()) return { ok: true, empty: true, fileName };
   try { fs.writeFileSync(file, diff, 'utf8'); }
   catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
@@ -1482,13 +1586,6 @@ function listLauncherAuthorizedDirs() {
   }
   return dirs;
 }
-
-// Both launchers pass the SAME two gates before spawning anything: (1) the shared trusted-sender gate
-// (only the real Blue Helm window's main frame at the exact entry document), and (2) the launcher-authz
-// directory authorizer (the path must canonicalize to a main-owned repo/worktree real directory). A
-// failure of EITHER refuses VISIBLY (Logs tab) and spawns NOTHING. The executable is then resolved
-// deterministically from main-owned env (never a renderer path) and spawned shell:false.
-const launcherGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
 
 // ---- FENCE COMPLETION: main-owned `pty-start` launch authority -------------------------------
 // Same trust anchors as every other privileged surface (canonical ENTRY_URL + the late-bound
@@ -1614,6 +1711,8 @@ const ptyStartAuthority = createPtyStartAuthority({
   // CONSTANT only, never a path, prompt, environment value, or other renderer payload.
   logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
 });
+// Both launchers check the sender and authorize the directory before resolving or spawning an
+// executable. Review diff uses the same directory policy and its canonical directory result.
 const launcherAuthorizer = createLauncherAuthorizer({
   realpath: (p) => fs.realpathSync.native(p),
   isDirectory: (p) => fs.statSync(p).isDirectory(),
@@ -1637,9 +1736,23 @@ const openExternalIpc = createOpenExternalIpc({
   assessSender: (e) => launcherGate.assess(e),
   validateUrl: validateQuickLinkUrl,
   openExternal: (url) => shell.openExternal(url),
+  confirmTerminalLink: async (url) => {
+    const result = await dialog.showMessageBox(win, {
+      type: 'question',
+      title: 'Open terminal link',
+      message: 'Open this terminal link in your browser?',
+      detail: url,
+      buttons: ['Cancel', 'Open Link'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    return result.response === 1;
+  },
   logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
 });
 ipcMain.handle('open-external', async (e, url) => openExternalIpc.handleOpenExternal(e, url));
+ipcMain.handle('open-terminal-link', (e, url) => openExternalIpc.handleOpenTerminalLink(e, url));
 
 // S11 usage panel: plan usage saved by Claude Code's status line (usage/usage-statusline.js), read
 // back as validated numbers only. One file per Windows user, shared by stable and dev copies.
@@ -1673,18 +1786,26 @@ ipcMain.handle('set-agent-token', (e, token) => {
   const t = norm.token;
   if (!isAgentToken(t)) return { ok: false, error: 'not a GitHub token' };
   if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'safeStorage encryption not available on this system' };
-  try {
-    const enc = safeStorage.encryptString(t);
-    const s = loadSecure(); s.agentGitTokenEnc = enc.toString('base64'); saveSecure(s);
-    agentGitToken = t;
-    tlog(`[agent-git] ABlueAgent token stored; new agent panes push as ABlueAgent${norm.removed ? ` (${norm.removed} invisible or space character(s) removed)` : ''}`);
-    return { ok: true };
-  } catch { return { ok: false, error: 'could not encrypt or save the token' }; }
+  let s;
+  try { s = loadSecure(); }
+  catch { return { ok: false, error: 'could not read secure.json' }; }
+  try { s.agentGitTokenEnc = safeStorage.encryptString(t).toString('base64'); }
+  catch { return { ok: false, error: 'could not encrypt the token' }; }
+  try { saveSecure(s); }
+  catch { return { ok: false, error: 'could not save secure.json' }; }
+  agentGitToken = t;
+  tlog(`[agent-git] ABlueAgent token stored; new agent panes push as ABlueAgent${norm.removed ? ` (${norm.removed} invisible or space character(s) removed)` : ''}`);
+  return { ok: true };
 });
 ipcMain.handle('clear-agent-token', (e) => {
   const g = launcherGate.assess(e);
   if (!g.ok) return { ok: false, error: g.reason };
-  const s = loadSecure(); delete s.agentGitTokenEnc; saveSecure(s);
+  let s;
+  try { s = loadSecure(); }
+  catch { return { ok: false, error: 'could not read secure.json' }; }
+  delete s.agentGitTokenEnc;
+  try { saveSecure(s); }
+  catch { return { ok: false, error: 'could not save secure.json' }; }
   agentGitToken = null;
   tlog('[agent-git] ABlueAgent token cleared; new agent panes use your own git login');
   return { ok: true };
@@ -1725,6 +1846,7 @@ function stopPaneSession(id, reason, expected) {
   const sid = paneSessions.get(id);
   if (!sid || (expected !== undefined && sid !== expected)) return;
   paneSessions.delete(id);
+  sessionTouchedAt.delete(sid);
   sessionMemoryCall(() => sessionMemory().recordStop(sid, reason));
 }
 
@@ -1758,6 +1880,55 @@ ipcMain.handle('session-resume-dismiss', (e, sessionId) => {
   return res && res.ok ? { ok: true } : { ok: false, error: (res && res.reason) || 'session-memory-failed' };
 });
 
+// ---- S46: session hygiene ----------------------------------------------------------------------
+// Each recorded Claude session's owner, state, done-when and idle time (app/session-hygiene.js).
+// Finished sessions archive themselves here too, so a Mako left running for days still archives
+// them. Trusted sender only. `day` is the local calendar day, so the renderer shows the idle list
+// once a day.
+ipcMain.handle('session-hygiene-list', (e) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  const archived = sessionMemoryCall(() => sessionMemory().archiveFinished());
+  if (!archived || archived.ok !== true) return { ok: false, error: (archived && archived.reason) || 'session-memory-failed' };
+  if (archived.archived) tlog(`[session-hygiene] archived ${archived.archived} finished session(s)`);
+  const rows = sessionHygiene.view(archived.records);
+  const idle = sessionHygiene.idleRows(rows);
+  return { ok: true, rows, idle, idleDays: sessionHygiene.IDLE_DAYS, day: sessionHygiene.dayKey(new Date()) };
+});
+ipcMain.handle('session-hygiene-done-when', (e, sessionId, text) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  // Not through sessionMemoryCall: a refused done-when (bad text, an unknown session) is Blue's input,
+  // shown on the row, not a session-memory failure, so it must not raise the "IDs are not being
+  // recorded" notice. A real store failure (read or write) still does.
+  const INPUT_REFUSALS = [sessionMemoryMod.REASON.BAD_DONE_WHEN, sessionMemoryMod.REASON.UNKNOWN_SESSION, sessionMemoryMod.REASON.BAD_SESSION_ID];
+  let res;
+  try { res = sessionMemory().setDoneWhen(sessionId, text); }
+  catch (err) { tlog(`[session-hygiene] done-when failed: ${(err && err.message) || err}`); return { ok: false, error: 'session-memory-failed' }; }
+  if (res && res.ok) return { ok: true };
+  const reason = (res && res.reason) || 'session-memory-failed';
+  if (INPUT_REFUSALS.includes(reason)) tlog(`[session-hygiene] done-when refused [${reason}]`);
+  else noteSessionMemory(res);
+  return { ok: false, error: reason };
+});
+// S46: a session's last activity: the last input that reached its pane (typing, a pasted or spoken
+// prompt; every ordinary input route converges on pty-write). Recorded here rather than from the
+// pane's output so the pinned pty-start handler (launcher-fence-invariant.test.js) stays unchanged.
+// Written at most once an hour per session.
+const SESSION_TOUCH_MS = 60 * 60 * 1000;
+const SESSION_TOUCH_RETRY_MS = 5 * 60 * 1000;
+const sessionTouchedAt = new Map();
+function touchPaneSession(id) {
+  const sid = paneSessions.get(id);
+  if (!sid) return;
+  const t = Date.now();
+  const last = sessionTouchedAt.get(sid);
+  if (last !== undefined && t - last < SESSION_TOUCH_MS) return;
+  const res = sessionMemoryCall(() => sessionMemory().touch(sid));
+  // A failed write is tried again after 5 minutes, not an hour, and not on every keystroke.
+  sessionTouchedAt.set(sid, res && res.ok ? t : t - SESSION_TOUCH_MS + SESSION_TOUCH_RETRY_MS);
+}
+
 // ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
 // worktree, optionally running the chosen agent CLI, with bytes streamed both ways.
@@ -1786,11 +1957,8 @@ ipcMain.handle('pty-start', (e, opts) => {
   // a successful spawn (below), so a refused/failed launch leaves no mapping.
   let acceptedRunId = null;
 
-  // Hard gate: fenced roles (web-scout, operator, source-scout) must run inside the
-  // ensure-output-dir sandbox. Enforce here rather than relying on renderer discipline —
-  // same "tool-enforced-not-convention" principle the hook itself is built on. Uses the
-  // same realpath + case-fold logic as fence-write.js so both layers agree on what "inside"
-  // means and can't be split by a symlink or a Unicode/case path trick.
+  // The main process requires fenced roles to launch inside the ensure-output-dir sandbox.
+  // That working directory is the sandbox root for the tool hook's separate file checks.
   let fencedCwd = null;
   if (launch.fenced) {
     // Reason CONSTANTS only. The pre-existing messages interpolated `declaredCwd`, `resolvedCwd`
@@ -1944,9 +2112,9 @@ ipcMain.handle('pty-start', (e, opts) => {
   //
   // buildPtyEnv constructs CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Video Scout's safeStorage
   // GEMINI_API_KEY when applicable, at most the two exact string-valued pane-status transport
-  // entries, and, for a fenced web-scout pane only, the controlled-WebFetch mode chosen above, before
-  // spreading the filtered ambient base. The reserved set is derived from the emitted main-issued map
-  // plus absent-but-owned pane-status names, Video Scout's Gemini name and the WebFetch mode name; every
+  // entries, the web-scout's controlled-WebFetch mode and the page reader's validator path, before
+  // spreading the filtered ambient base. The reserved set includes the emitted main-issued map and
+  // absent-but-owned names for pane status, Gemini, WebFetch mode and the page-reader policy. Every
   // ASCII-case ambient variant is removed first, so correctness does not depend on key ordering. Neither
   // pane-status entry is recovered from process.env, and no environment value is logged. For
   // unfenced panes, stripAdmissionEnv removes admission keys from the inherited PTY
@@ -1963,6 +2131,7 @@ ipcMain.handle('pty-start', (e, opts) => {
     geminiKey,
     paneStatusEnv,
     webFetchMode: webFetch.mode,
+    pageReaderPolicy: fencedRole && launch.role === pageReaderMod.ROLE ? require.resolve('./page-reader') : undefined,
     agentGit: agentPane,
     agentGitToken,
   });
@@ -2055,12 +2224,25 @@ ipcMain.handle('pty-start', (e, opts) => {
 //
 // The refusal is visible (bounded reason on the Logs channel, throttled so a held key cannot flood it)
 // and it never echoes the bytes. Uncontrolled panes take the original path, byte-for-byte.
-ipcMain.on('pty-write', (_e, { id, data }) => {
+ipcMain.on('pty-write', (e, payload) => {
+  if (ipcSenderRefusal('pty-write', e)) return;
+  const { id, data } = payload;
+  // S46: input reaching a Claude pane is the session's activity (at most one write an hour).
+  touchPaneSession(id);
   admissionPtyBoundary.writeDirect(id, data);
 });
-ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
+ipcMain.on('pty-resize', (e, payload) => {
+  if (ipcSenderRefusal('pty-resize', e)) return;
+  const { id, cols, rows } = payload;
+  const p = ptys.get(id);
+  if (p) {
+    try { p.resize(cols, rows); }
+    catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); }
+  }
+});
 // S06: pty-kill kills the pane's process tree first (taskkill /T needs the live shell), then pty.kill().
-ipcMain.on('pty-kill', (_e, id) => {
+ipcMain.on('pty-kill', (e, id) => {
+  if (ipcSenderRefusal('pty-kill', e)) return;
   const p = ptys.get(id); if (p) { ptys.delete(id); processTree.killTree(p.pid, () => { try { p.kill(); } catch {} }); }
   // Explicit pane close: the run's report is no longer reachable from the UI, so drop the mapping.
   videoScoutRunIds.remove(id);
