@@ -95,7 +95,8 @@ async function scenarioFirstRun() {
     out.pttNotice = t.shown('#makoNotice') ? document.getElementById('makoNotice').textContent : null;
     document.activeElement.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true, cancelable: true }));
     out.pttNoticeAfterRelease = t.shown('#makoNotice') ? document.getElementById('makoNotice').textContent : null;
-    out.pttLogged = ['[stt] dictation engine unavailable', '[stt] click into an agent pane first'].some((x) => t.log().slice(logBefore).includes(x));
+    // Logs is written in an animation frame (S56 #236), so wait for the line rather than reading at once.
+    out.pttLogged = await t.waitFor(() => ['[stt] dictation engine unavailable', '[stt] click into an agent pane first'].some((x) => t.log().slice(logBefore).includes(x)), 3000);
     document.getElementById('makoTab-brain').focus();
     out.rightPrevented = t.key('ArrowRight');
     out.afterRight = t.selectedTab();
@@ -334,7 +335,7 @@ async function scenarioTopBar() {
     out.pausedRestored = t.shown('#makoPausedBanner');
     out.pausedText = document.getElementById('makoPausedBanner').textContent;
     out.quietBadStoredOff = !t.shown('#makoQuietBanner');
-    out.quietBadLogged = t.log().includes('stored quiet-hours state not recognised');
+    out.quietBadLogged = await t.waitFor(() => t.log().includes('stored quiet-hours state not recognised'), 3000);
     out.usageOnTab = {};
     out.pausedOnTab = {};
     for (const tab of ['brain', 'control', 'aquarium']) {
@@ -399,7 +400,7 @@ async function refusalCase(name, beforeBoot) {
     out.paletteInPage = !!document.getElementById('makoPalette');
     // The top bar's Settings button says why there is no Settings page, and opens Logs.
     document.getElementById('makoSettingsTopbar').click();
-    out.settingsRefusalLogged = t.log().includes('Settings is unavailable');
+    out.settingsRefusalLogged = await t.waitFor(() => t.log().includes('Settings is unavailable'), 3000);
     out.logsOpened = document.querySelector('.tabpane[data-pane=logs]').classList.contains('active');
     return out;
   })()`);
@@ -430,7 +431,8 @@ async function scenarioSaveFails() {
     const status = document.getElementById('makoLayoutStatus');
     const first = status.textContent;
     await t.waitFor(() => !status.textContent.includes('Saving'));
-    return { first, final: status.textContent, logged: t.log().includes('could not save settings (uiLayout): save-failed') };
+    const logged = await t.waitFor(() => t.log().includes('could not save settings (uiLayout): save-failed'), 3000);
+    return { first, final: status.textContent, logged };
   })()`);
   control.saveFail = false;
   await park();

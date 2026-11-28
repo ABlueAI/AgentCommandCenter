@@ -85,11 +85,13 @@ class PtyParser {
   /**
    * @param {(event: {type: string, text: string, partial: boolean}) => void} onEvent
    */
-  constructor(onEvent) {
+  constructor(onEvent, { completedLinesOnly = false, maxPendingChars = Infinity } = {}) {
     if (typeof onEvent !== 'function') throw new TypeError('PtyParser requires an onEvent callback');
     this._emit  = onEvent;
     this._buf   = '';            // raw bytes buffered since the last completed line
     this._state = ST_ASSISTANT;
+    this._completedLinesOnly = completedLinesOnly;
+    this._maxPendingChars = maxPendingChars;
   }
 
   /**
@@ -104,12 +106,14 @@ class PtyParser {
     this._buf += raw;
     const parts = this._buf.split('\n');
     this._buf = parts.pop(); // tail: the incomplete current line (may be '')
+    if (this._buf.length > this._maxPendingChars) this._buf = this._buf.slice(-this._maxPendingChars);
 
     for (const seg of parts) {
       const line = _lastCrSeg(seg);
       this._processLine(line, false);
     }
 
+    if (this._completedLinesOnly) return;
     // Emit a partial event for the in-progress line when it has real content.
     // The renderer uses this to update (not append) the current live bubble.
     const partialRaw  = _lastCrSeg(this._buf);
