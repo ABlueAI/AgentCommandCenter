@@ -160,10 +160,7 @@ function checkLockfile(lock, exceptions = PACKAGE_EXCEPTIONS) {
 }
 
 // --- THIRD-PARTY-NOTICES.md file tables -------------------------------------------------------
-// Finds every markdown table whose header has a Licence column (a cell starting "Licence" or
-// "License"), other than the npm-package table, and returns [{ file, licence }] for its rows.
-// A row whose first cell isn't exactly one backticked path is returned with file: null, so the
-// check can fail it instead of skipping it.
+// Parse the notice tables into their headers and trimmed cells.
 function noticeTables(md) {
   const lines = md.replace(/\r\n/g, '\n').split('\n');
   const tables = [];
@@ -178,6 +175,7 @@ function noticeTables(md) {
   }
   return tables;
 }
+// Find the file tables' Licence cells. Preserve malformed file rows so they fail validation.
 function noticeFileRows(md) {
   const out = [];
   for (const { header, rows } of noticeTables(md)) {
@@ -272,5 +270,5 @@ function checkNoticeNpmTable(npmRows, lock, exceptions = PACKAGE_EXCEPTIONS) {
 
 module.exports = {
   PERMISSIVE, PACKAGE_EXCEPTIONS, FILE_EXCEPTIONS,
-  parseSpdx, checkLockfile, noticeFileRows, checkNoticeRows, noticeNpmRows, checkNoticeNpmTable,
+  parseSpdx, checkLockfile, noticeTables, noticeFileRows, checkNoticeRows, noticeNpmRows, checkNoticeNpmTable,
 };

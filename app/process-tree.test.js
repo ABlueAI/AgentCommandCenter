@@ -8,6 +8,7 @@
 const path = require('path');
 const { spawn, execFile, execFileSync } = require('child_process');
 const { createProcessTreeKiller, taskkillArgs, taskkillPath } = require('./process-tree');
+const { CHANNEL, channelFor } = require('./main-log-level');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -18,7 +19,7 @@ function assert(cond, label) {
 const WIN_ENV = { SystemRoot: 'C:\\Windows' };
 const TASKKILL = 'C:\\Windows\\System32\\taskkill.exe';
 
-function makeKiller(over) {
+function makeKiller(over, onLog = () => {}) {
   const calls = [];
   const logs = [];
   const killer = createProcessTreeKiller(Object.assign({
@@ -26,7 +27,7 @@ function makeKiller(over) {
     env: WIN_ENV,
     execFile: (exe, args, opts, cb) => { calls.push({ kind: 'async', exe, args, opts }); cb(null); },
     execFileSync: (exe, args, opts) => { calls.push({ kind: 'sync', exe, args, opts }); return ''; },
-    log: (line) => logs.push(line),
+    log: (line, kind) => { logs.push(line); onLog(line, kind); },
   }, over || {}));
   return { killer, calls, logs };
 }
@@ -94,18 +95,24 @@ function makeKiller(over) {
   assert(done && logs.some((l) => /taskkill FAILED/.test(l)), 'a throwing execFile is logged and pty.kill() still runs');
 }
 {
-  const { killer, calls, logs } = makeKiller();
+  const { killer, calls, logs } = makeKiller({}, (line, kind = 'routine') => {
+    assert(channelFor(line, kind) === CHANNEL.ERROR, 'a skipped pane-close taskkill is shown as a failure');
+  });
   let done = false;
   killer.killTree(undefined, () => { done = true; });
   assert(done && calls.length === 0 && logs.some((l) => /skipped \(no-valid-pid\)/.test(l)),
     'a pane without a valid PID skips taskkill visibly and still calls pty.kill()');
 }
 {
-  const { killer, calls, logs } = makeKiller({ env: {} });
+  const channels = [];
+  const { killer, calls, logs } = makeKiller({ env: {} }, (line, kind = 'routine') => channels.push(channelFor(line, kind)));
   let done = false;
   killer.killTree(10, () => { done = true; });
   assert(done && calls.length === 0 && logs.some((l) => /taskkill-path-unresolved/.test(l)),
     'without SystemRoot, nothing runs, the skip is logged, and pty.kill() still runs');
+  killer.killTreesSync([10]);
+  assert(channels.length === 2 && channels[1] === CHANNEL.ERROR && /shutdown: skipped/.test(logs[1]),
+    'a skipped shutdown taskkill is shown as a failure');
 }
 {
   const { killer, calls, logs } = makeKiller({ platform: 'linux' });

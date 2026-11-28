@@ -227,7 +227,7 @@ function createPaneStatusLock(deps) {
       return { ok: false, reason: LOCK_REFUSAL.UNREADABLE };
     }
     if (current !== handle.bytes) {
-      log('[pane-status] settings lock changed under us; leaving it in place');
+      log('[pane-status] settings lock changed under us; leaving it in place', 'error');
       return { ok: false, reason: LOCK_REFUSAL.CHANGED };
     }
     try { fs.unlinkSync(target); } catch { return { ok: false, reason: LOCK_REFUSAL.UNREADABLE }; }
