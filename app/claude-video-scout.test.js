@@ -554,7 +554,7 @@ test('Video Scout offers both providers and Claude bypasses the Gemini key and l
   });
   // Closing the pane stops local Whisper as well as the run in main (Codex finding on 8ad4b6d).
   assert.match(js, /if \(claudeVideoScout\) \{\s*\/\/[^\n]*\n\s*if \(window\.ccSTT && window\.ccSTT\.cancelVideoTranscription\) window\.ccSTT\.cancelVideoTranscription\(id\);\s*cc\.claudeVideoScoutCancel\(id\);/);
-  assert.match(js, /if \(claudeVideoScout\) \{\s*runClaudeVideoInPane\(id, opts.videoUrl, opts.analysisFocus, opts.claudeVideoSettings\);\s*return;/);
+  assert.match(js, /if \(claudeVideoScout\) \{\s*cc\.ptyRelease\(id\);[^\n]*\n\s*runClaudeVideoInPane\(id, opts\.videoUrl, opts\.analysisFocus, opts\.claudeVideoSettings\);\s*return id;/);
 });
 
 test('the modal loads, validates and remembers Claude settings, and the estimate bar sends the answer', async () => {
@@ -813,7 +813,7 @@ test('IPC maps Whisper replies, cancels only its own run, and logs real errors b
 
 test('main cancels the run when the window reloads, and the renderer shows Whisper failures and cleans terminal text', async () => {
   const main = await fs.readFile(path.join(__dirname, 'main.js'), 'utf8');
-  assert.match(main, /win\.webContents\.on\('did-start-navigation', \(details, _url, isInPlace, isMainFrame\) => \{\s*const mainFrame = details\?\.isMainFrame \?\? isMainFrame;\s*const sameDocument = details\?\.isSameDocument \?\? isInPlace;\s*if \(mainFrame && !sameDocument\) claudeScout\.shutdown\(\);/);
+  assert.match(main, /win\.webContents\.on\('did-start-navigation', \(details, url, isInPlace, isMainFrame\) => \{\s*const mainFrame = details\?\.isMainFrame \?\? isMainFrame;\s*const sameDocument = details\?\.isSameDocument \?\? isInPlace;\s*if \(mainFrame && !sameDocument\) \{\s*claudeScout\.shutdown\(\);/);
 
   const js = await fs.readFile(path.join(__dirname, 'renderer/app.js'), 'utf8');
   const writes = [];

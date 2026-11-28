@@ -615,10 +615,12 @@ function createWindow() {
   win.webContents.on('did-start-navigation', (details, url, isInPlace, isMainFrame) => {
     const mainFrame = details?.isMainFrame ?? isMainFrame;
     const sameDocument = details?.isSameDocument ?? isInPlace;
-    if (mainFrame && !sameDocument && (details?.url ?? url) === ENTRY_URL) {
-      ptyRendererUnavailable = true;
+    if (mainFrame && !sameDocument) {
       claudeScout.shutdown();
-      retireRendererPanes();
+      if ((details?.url ?? url) === ENTRY_URL) {
+        ptyRendererUnavailable = true;
+        retireRendererPanes();
+      }
     }
   });
   win.webContents.on('did-navigate', (_event, url) => {
