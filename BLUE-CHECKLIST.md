@@ -1581,10 +1581,12 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
   each "needs Blue" question in its PR. For each PR the digest marks `READY TO MERGE`, read its
   TLDR, then Files changed > Review changes > Approve > Submit review, then Merge pull request >
   Confirm merge. Merge only on `READY TO MERGE`.
-- **Once the commander runs on H1 (step 80):** its colour-coded evening merge list is what you read
-  at the sitting. Merge the `READY TO MERGE` PRs in the order it gives. To pause the build, tell the
-  commander "stop" and pause the routines on the routines page (until S67 links them, each stops
-  only its own part).
+- **Once the commander runs on H1 (step 80):** the "Mako evening digest" routine (switched on in
+  step 80) sends the list at 8:03 PM; it is the list you read at the sitting. Merge the `READY TO MERGE` PRs in the order it gives,
+  and until the digest prompt checks Codex's pass (a follow-up to S67), check each one's 👍 from
+  Codex too. To pause the build, pause
+  the routines on the routines page; the commander sees the runner routine is off and starts
+  nothing.
 - **During the day: nothing.** A question for you also arrives as a GitHub notification (a PR
   comment starting "@ABlueAI needs Blue:"); it can wait for the evening.
 - **Tuesday and Friday evenings:** the PC checks, batched, until H1 automates them ("Do next" item
@@ -1637,17 +1639,50 @@ Step 93 comes from PR #334 (issue #273). Step numbers 86, 87 and 90 to 92 belong
 Step 80 comes from PR #282 (docs/DECISIONS.md, 2026-11-24, D-084). Step numbers 77 to 79 belong to
 open PRs (#253 and #254).
 
-- [ ] **80. Set up the commander on H1.** **About 15 to 30 minutes** (an estimate; S67's PR gives
-  the real figure), at H1, once S67's PR is merged. S67 is `READY`, so an agent can build it now.
-  - Open a new local Claude chat on H1 named "Mako command", give it the standing prompt from S67's
-    PR, and start its 30-minute heartbeat the way the PR says.
-  - From then on it starts and resumes the cloud build sessions, keeps usage to about 95% of each
-    5-hour window, and sends you one colour-coded merge list each evening, in merge order. Your
-    laptop chat (Mako main) becomes the watcher.
-  - To stop everything: tell that chat "stop" and pause the routines on the claude.ai routines
-    page. Until S67's PR links the two, each stops only its own part, so do both.
-  - *Done when:* the commander has run on H1 for one full day and its evening merge list reached
-    you; tell any agent "step 80 done" and it ticks this with the date.
+- [ ] **80. Set up the commander on H1.** **About 20 minutes** (builder's estimate), at H1, once
+  S67's PR is merged. docs/COMMANDER.md has the tick prompt and why each step is there (your
+  design of 2026-11-25: a desktop scheduled task, RemoteTrigger, no GitHub login on H1).
+  - Clone the repository to `D:\Mako\command` and stay on `main`; in it, run
+    `cmd /c git config --local credential.helper ""` (so a failed fetch can never ask you to
+    sign in to GitHub; `git config --local --get credential.helper` then prints an empty line);
+    make an empty folder `D:\Mako\command-state`.
+  - Check H1 has no GitHub login: in PowerShell, `gh auth status` must say you are not logged in
+    (or `gh` isn't installed), and Windows Credential Manager > Windows Credentials must list no
+    `git:https://github.com` entry. If either has one, stop and ask an agent; don't remove a login
+    another tool on H1 needs without deciding that first.
+  - Copy the permission file from docs/COMMANDER.md "Permissions" to
+    `D:\Mako\command\.claude\settings.local.json`. Never set the task to `auto` or bypass mode.
+  - Set Mako's usage status line on H1. Open `%USERPROFILE%\.claude\settings.json` (create it with
+    `{}` if missing). If it already has a `statusLine`, stop and ask an agent. Otherwise add
+    `"statusLine": { "type": "command", "command": "node \"D:/Mako/command/app/usage/usage-statusline.js\"" }`,
+    then check the file still parses: `node -e "JSON.parse(require('fs').readFileSync(process.env.USERPROFILE+'/.claude/settings.json','utf8'));console.log('ok')"`
+    must print `ok`.
+  - On claude.ai/code/routines, open "Mako evening digest" and remove its connectors (it only reads
+    GitHub; docs/RUNNER.md "Applied so far" found a CRM connector on it), and switch it **on**, as
+    step 27 already says, so the evening list doesn't depend on H1.
+  - In Windows power settings, set H1 never to sleep while plugged in, and keep the Claude desktop
+    app open.
+  - In the Claude desktop app, add a scheduled task named "Mako command tick": every 30 minutes,
+    created or started at about :10 past the hour (or set to :10 and :40 if the app asks for a
+    time), so one tick an hour lands between :07 and :25, folder `D:\Mako\command`, model Sonnet 5.5, permission mode default, with the one-line prompt
+    in docs/COMMANDER.md "Set-up".
+  - To stop everything: pause the routines on claude.ai/code/routines; the next tick sees the runner
+    routine is off and starts nothing. Turning the "Mako command tick" task off stops only the
+    commander.
+  - *Verify (5 minutes, after the first tick between :07 and :25):* the tick ran with no permission
+    prompt; `D:\Mako\command-state\log.md` has its line ("started …", "at cap …", "nothing READY"
+    or "usage not readable …"); a tick outside the window logged "outside window". If the log
+    says "stopped: runner routine off" while the routine is on, "read failed", or, after an hour,
+    only "outside window", tell an agent.
+  - *Verify the one guard left to the prompt (2 minutes):* in a Claude Code session in
+    `D:\Mako\command`, run `/permissions` and try adding a rule that allows RemoteTrigger only for
+    running a routine. If Claude Code accepts such a rule, tell an agent, which will narrow the
+    permission file to it. If not, nothing technical stops the commander from changing a routine;
+    only its prompt does (docs/COMMANDER.md "What is verified and what isn't"). Going on with this
+    step means you accept that.
+  - *Done when:* the commander has run on H1 for one full day, a runner fire it started shows in
+    claude.ai/code, and the evening digest reached your phone; tell any agent "step 80
+    done" and it ticks this with the date.
 
 ## From your open-source verdicts (2026-11-25)
 
