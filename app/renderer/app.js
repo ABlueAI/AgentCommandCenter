@@ -99,44 +99,8 @@ const ROLES = {
   'page-reader':    { label: 'Page Reader',     glyph: '📄', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true, page: true },
 };
 
-// ---- chat bubble renderer -----------------------------------------------
-function makeBubble(type, text, partial) {
-  const div = document.createElement('div');
-  div.className = `chat-bubble ${type}${partial ? ' partial' : ''}`;
-  const inner = document.createElement('span');
-  inner.className = 'bubble-text';
-  inner.textContent = text;
-  div.appendChild(inner);
-  return div;
-}
-
-function drainChatEvents(t) {
-  t.rafId = null;
-  const events = t.pendingEvents.splice(0);
-  for (const ev of events) {
-    if (ev.partial) {
-      if (!t.tailBubble) {
-        t.tailBubble = makeBubble(ev.type, ev.text, true);
-        t.chatBody.appendChild(t.tailBubble);
-      } else {
-        t.tailBubble.querySelector('.bubble-text').textContent = ev.text;
-      }
-    } else {
-      if (t.tailBubble) {
-        // Finalize the in-progress bubble with the confirmed final text.
-        t.tailBubble.querySelector('.bubble-text').textContent = ev.text;
-        t.tailBubble.classList.remove('partial');
-        t.tailBubble = null;
-      } else {
-        t.chatBody.appendChild(makeBubble(ev.type, ev.text, false));
-      }
-    }
-  }
-  t.chatBody.scrollTop = t.chatBody.scrollHeight;
-}
-
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
-const terms = new Map(); // id -> { term, fit, pane, ro, parser, chatBody, pendingEvents, rafId, tailBubble }
+const terms = new Map();
 let termSeq = 0;
 let activeTermId = null;  // last-focused pane (dictation LOCKS its target from this at record start)
 let sttDictationTargetId = null; // pane locked when recording started; transcript goes ONLY here
@@ -160,6 +124,8 @@ function applyTheme(name) {
   cc.saveSettings({ theme: name });
 }
 function switchTab(name) {
+  const log = $('#logView');
+  if (log.clientHeight > 0) followLogTail = logsAtBottom(log);
   // Leaving the Terminals view must not strand maximize state (V1a): coming back
   // always lands on the normal grid, never on a half-forgotten maximized layout.
   if (name !== 'terminals') paneMaximizer.handleViewSwitch();
@@ -167,6 +133,7 @@ function switchTab(name) {
   if (name !== 'library') libMaximizer.handleViewSwitch();
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
   document.querySelectorAll('.tabpane').forEach((x) => x.classList.toggle('active', x.dataset.pane === name));
+  if (name === 'logs' && followLogTail) log.scrollTop = log.scrollHeight;
 }
 // RESIZE OWNERSHIP. A Dockview-hosted terminal is fitted ONLY by its guarded fit controller, which
 // checks visibility and geometry inside an animation frame and refuses zero/hidden/non-finite sizes.
@@ -233,11 +200,10 @@ document.addEventListener('keydown', (e) => {
 // innerHTML/Markdown/URL attributes. Copy Report and Maximize REUSE the V1a clipboard consumer and
 // the pane-maximize controller (no duplicate implementations).
 const LV = window.ccLibraryView;
-const libState = { entries: [], selectedHandle: null, currentReportText: '', loaded: false };
+const libState = { entries: [], selectedHandle: null, currentReportText: '', loaded: false, scanning: false, scanError: '' };
 const libClip = window.ccClipboardConsumer.createClipboardConsumer({
   invokeRead: () => cc.clipboardRead(),
   invokeWrite: (s) => cc.clipboardWrite(s),
-  ptyWrite: () => {},          // the reader never pastes into a PTY
   log: appendLog,
   paneId: 'library',
 });
@@ -268,7 +234,7 @@ function renderLibraryList() {
   if (filtered.length === 0) {
     listEl.appendChild(agentDom.el(document, 'div', {
       className: 'empty muted',
-      text: libState.entries.length ? 'No runs match the current filters.' : 'No Video Scout runs found yet.',
+      text: libState.scanError || (libState.entries.length ? 'No runs match the current filters.' : 'No Video Scout runs found yet.'),
     }));
   } else {
     for (const entry of filtered) {
@@ -279,39 +245,50 @@ function renderLibraryList() {
     }
   }
   const c = LV.computeCounts(libState.entries);
-  $('#libStatus').textContent =
+  $('#libStatus').textContent = libState.scanning ? 'Scanning…' : libState.scanError ||
     `${c.total} run(s) · ${c.available} with report · ${c.notPersisted} metadata-only · ${c.incomplete} incomplete · ${c.approximate} approx · ${c.unknown} unknown`;
 }
 
 async function refreshLibrary() {
-  // V3b: a refresh START bumps the reader epoch (and clears the follow-up state). If something
-  // newer (a selection or Open Report) takes the reader over while the scan runs, this refresh has
-  // become LATE: it still applies the fresh list + handles below, but it must NOT clear or replace
-  // what the newer action displayed.
+  if (libState.scanning) return;
+  // A successful scan replaces every Library handle in main. Retire Ask immediately and
+  // block the old list until the new handles arrive. Open Report uses a separate pane identity.
   const myEpoch = libFollowup.noteRefreshStart();
   libState.loaded = true;
+  libState.scanning = true;
+  libState.scanError = '';
+  $('#libList').inert = true;
+  $('#libRefresh').disabled = true;
   $('#libStatus').textContent = 'Scanning…';
-  let res;
-  try { res = await cc.libraryList(); }
-  catch (e) { appendLog(`[library] list failed: ${(e && e.message) || e}\n`); $('#libStatus').textContent = 'Scan failed.'; return; }
-  if (!res || !res.ok) {
-    appendLog(`[library] list refused: ${(res && res.error) || 'unknown error'}\n`);
-    $('#libStatus').textContent = 'Scan refused.';
-    return;
-  }
-  libState.entries = Array.isArray(res.entries) ? res.entries : [];
-  if (libFollowup.isCurrent(myEpoch)) {
-    libState.selectedHandle = null;
-    clearReader();
-  }
-  renderLibraryList();
-  // Honest, metadata-only reporting of what the scan found (no report/manifest content).
-  appendLog(`[library] scanned root: total=${res.total} valid=${libState.entries.length} invalid=${res.invalidCount} capExceeded=${res.capExceeded === true}\n`);
-  if (res.capExceeded) appendLog('[library] NOTE: run-directory cap reached; some runs are not listed.\n');
-  if (res.invalidCount > 0) {
-    const byReason = {};
-    for (const iv of (res.invalid || [])) byReason[iv.reason] = (byReason[iv.reason] || 0) + 1;
-    appendLog(`[library] ${res.invalidCount} invalid record(s) excluded: ${Object.entries(byReason).map(([k, v]) => `${k}x${v}`).join(', ')}\n`);
+  try {
+    const res = await cc.libraryList();
+    if (!res || !res.ok || !Array.isArray(res.entries)) {
+      appendLog(`[library] list refused: ${res?.error || 'invalid response'}\n`);
+      libState.scanError = 'Scan refused.';
+    } else {
+      libState.entries = res.entries;
+      // Metadata only. The scan results can include excluded or unlisted runs.
+      appendLog(`[library] scanned root: total=${res.total} valid=${libState.entries.length} invalid=${res.invalidCount} capExceeded=${res.capExceeded === true}\n`);
+      if (res.capExceeded) appendLog('[library] NOTE: run-directory cap reached; some runs are not listed.\n');
+      if (res.invalidCount > 0) {
+        const byReason = {};
+        for (const iv of res.invalid) byReason[iv.reason] = (byReason[iv.reason] || 0) + 1;
+        appendLog(`[library] ${res.invalidCount} invalid record(s) excluded: ${Object.entries(byReason).map(([k, v]) => `${k}x${v}`).join(', ')}\n`);
+      }
+    }
+  } catch (e) {
+    appendLog(`[library] list failed: ${(e && e.message) || e}\n`);
+    libState.scanError = 'Scan failed.';
+  } finally {
+    if (libState.scanError) libState.entries = [];
+    if (libFollowup.isCurrent(myEpoch)) {
+      libState.selectedHandle = null;
+      clearReader();
+    }
+    libState.scanning = false;
+    $('#libList').inert = false;
+    $('#libRefresh').disabled = false;
+    renderLibraryList();
   }
 }
 
@@ -340,6 +317,7 @@ function renderMeta(entryLike) {
 }
 
 async function selectLibraryEntry(entry) {
+  if (libState.scanning || !libState.entries.includes(entry)) return;
   // V3b: selecting bumps the epoch — clears the previous follow-up question/answer/errors and
   // makes any in-flight read or follow-up response stale. Selection NEVER submits anything.
   const myEpoch = libFollowup.noteSelection();
@@ -480,16 +458,27 @@ function openInAppTerminal(opts = {}) {
   // worktree metadata and must never be interpolated into innerHTML (AUDIT-REPORT.md finding #1).
   const pane = agentDom.buildTermPane(document, { badge, label, worktreeTitle: worktree || '', openReport: role === 'video-scout' && !claudeVideoScout });
   $('#terminalGrid').appendChild(pane);
-  const term = new Terminal({ theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
+  const termBody = pane.querySelector('.term-body');
+  const openTerminalLink = async (_event, uri) => {
+    try {
+      const result = await cc.openTerminalLink(uri);
+      // Main logs policy, confirmation, and OS refusals with bounded reason codes.
+      if (typeof result?.ok !== 'boolean') appendLog(`[terminal ${id}] Link open failed: unexpected response\n`);
+    } catch {
+      appendLog(`[terminal ${id}] Link open failed: IPC unavailable\n`);
+    }
+  };
+  const term = new Terminal({
+    theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000,
+    // Route OSC 8 through the same app policy as detected text links, including rejected schemes.
+    linkHandler: { activate: openTerminalLink, allowNonHttpProtocols: true },
+  });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
-  // Clickable URLs — opened only via the vetted shell.openExternal path, http(s) only.
-  term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => {
-    if (/^https?:\/\//i.test(uri)) cc.openExternal(uri);
-  }));
+  term.loadAddon(new WebLinksAddon.WebLinksAddon(openTerminalLink));
   // Correct width for wide/emoji glyphs so the agents' box-drawing TUIs render cleanly.
   try { term.loadAddon(new Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch {}
-  term.open(pane.querySelector('.term-body'));
+  term.open(termBody);
   // GPU renderer for smooth large output; fall back to DOM if the WebGL context is lost.
   try {
     const webgl = new WebglAddon.WebglAddon();
@@ -505,24 +494,27 @@ function openInAppTerminal(opts = {}) {
   //   Ctrl+C                    -> copy when text is selected, otherwise send SIGINT (^C)
   //   Ctrl+Shift+C              -> always copy the selection
   //   right-click               -> copy selection, else paste
-  //   OSC 52                    -> programs (e.g. Claude Code's "Copied!") set the OS clipboard
-  // Paste writes raw bytes to the PTY (like typing) rather than term.paste(), whose bracketed-
-  // paste escapes some TUIs (e.g. the Gemini prompt) silently drop.
-  // All clipboard access is async IPC to main (main is the security boundary — the
-  // sandboxed preload's Electron clipboard is undefined). The consumer helpers never
-  // throw/reject: a rejection or { ok:false } becomes a visible metadata-only Logs line,
-  // and a failed read returns null so it can never be pasted. Fire-and-forget callers
-  // (Ctrl+C/V, right-click, OSC 52) get a trailing .catch as belt-and-suspenders so a
-  // future edit can't turn one into an unhandled rejection.
+  // The CLI this pane actually runs: a role always launches its role CLI.
+  const paneCli = role ? ROLES[role].cli : cli;
+  // Paste behaviour per pane (clipboard-consumer.js pastePolicyFor): shell panes confirm a multiline
+  // paste; Gemini panes get plain text because the Gemini prompt drops bracketed-paste escapes.
+  const pastePolicy = window.ccClipboardConsumer.pastePolicyFor({ paneCli, claudeVideoScout });
+  if (pastePolicy.ignoreBracketedPaste) term.options.ignoreBracketedPasteMode = true;
   const clip = window.ccClipboardConsumer.createClipboardConsumer({
     invokeRead: () => cc.clipboardRead(),
     invokeWrite: (s) => cc.clipboardWrite(s),
-    ptyWrite: (text) => cc.ptyWrite(id, text),
+    paste: (text) => {
+      if (!terms.has(id) || term.options.disableStdin) return false;
+      term.paste(text); // xterm brackets only when the program has enabled bracketed paste.
+    },
+    confirmMultiline: pastePolicy.confirmMultiline
+      ? () => window.confirm('Paste multiple lines into this shell? Pasted lines can run commands.')
+      : undefined,
     log: appendLog,
     paneId: id,
   });
-  // The CLI this pane actually runs: a role always launches its role CLI.
-  const paneCli = role ? ROLES[role].cli : cli;
+  const clipboardFailed = () => appendLog(`[clipboard ${id}] Clipboard operation failed\n`);
+  const pasteFromClipboard = () => { clip.pasteIntoPty().catch(clipboardFailed); };
   term.attachCustomKeyEventHandler((e) => {
     // Shift+Enter -> newline in Claude Code panes (term-keys.js). preventDefault stops the browser
     // keypress that would otherwise make xterm also send a submitting CR.
@@ -532,42 +524,37 @@ function openInAppTerminal(opts = {}) {
       return false;
     }
     // Ctrl+V / Ctrl+Shift+V: paste once and cancel the browser's own paste (term-keys.js, S31).
-    if (window.ccTermKeys.handlePasteKey(e, () => { clip.pasteIntoPty().catch(() => {}); })) return false;
+    if (window.ccTermKeys.handlePasteKey(e, pasteFromClipboard)) return false;
     if (e.type !== 'keydown' || !e.ctrlKey) return true;
     const isC = e.code === 'KeyC' || (e.key && e.key.toLowerCase() === 'c');
     if (isC) {
       const sel = term.getSelection();
       appendLog(`[copy ${id}] Ctrl+${e.shiftKey ? 'Shift+' : ''}C: ${sel ? sel.length + ' chars selected' : 'no selection → SIGINT'}\n`);
-      if (sel) { clip.writeClip(sel).catch(() => {}); term.clearSelection(); return false; } // copy
+      if (sel) { clip.writeClip(sel).catch(clipboardFailed); term.clearSelection(); return false; } // copy
       if (e.shiftKey) return false;                          // Ctrl+Shift+C, nothing selected: swallow
       return true;                                           // plain Ctrl+C, nothing selected: SIGINT
     }
     return true;
   });
   appendLog(`[copy ${id}] key handler registered\n`);
-  pane.querySelector('.term-body').addEventListener('contextmenu', (e) => {
+  termBody.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const s = term.getSelection();
-    if (s) { clip.writeClip(s).catch(() => {}); term.clearSelection(); }
-    else clip.pasteIntoPty().catch(() => {});
+    if (s) { clip.writeClip(s).catch(clipboardFailed); term.clearSelection(); }
+    else pasteFromClipboard();
   });
-  // OSC 52: when a program in the PTY asks the terminal to set the clipboard (Claude Code's
-  // "(Copied!)", etc.), actually write it to the Windows clipboard. Payload is "<sel>;<base64>".
-  if (term.parser && term.parser.registerOscHandler) {
-    term.parser.registerOscHandler(52, (data) => {
-      const i = (data || '').indexOf(';');
-      if (i >= 0) {
-        const b64 = data.slice(i + 1);
-        if (b64 && b64 !== '?') {
-          let decoded = null;
-          try { decoded = decodeURIComponent(escape(atob(b64))); }
-          catch { try { decoded = atob(b64); } catch (err) { appendLog(`[osc52 ${id}] base64 decode failed: ${(err && err.message) || err}\n`); } }
-          if (decoded !== null) clip.writeClip(decoded, `osc52 ${id}`).catch(() => {});
-        }
-      }
-      return true; // handled
-    });
-  }
+  // Intercept native paste (e.g. Shift+Insert or an Edit menu) before xterm's own listeners.
+  termBody.addEventListener('paste', (e) => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    try { clip.pasteText(e.clipboardData?.getData('text/plain')); }
+    catch { clipboardFailed(); }
+  }, true);
+  // Consume OSC 52 without decoding the payload. The first refusal says what to do instead; repeats
+  // are counted and logged again at most once a minute (clipboard-consumer.js).
+  term.parser.registerOscHandler(52, window.ccClipboardConsumer.createOscClipboardRefusal({
+    log: appendLog, paneId: id,
+  }));
   // Keep this terminal fit to its grid cell whenever the layout changes — a pane added/removed,
   // the window resized, the tab shown. This is the canonical xterm.js pattern (observe the
   // container + debounce + fit); without it a reflowed pane keeps its old size and overflows.
@@ -600,7 +587,6 @@ function openInAppTerminal(opts = {}) {
   // the header. Remember the last non-empty value when xterm first observes it;
   // PowerShell and agent panes now use the same pane-local handoff.
   const selectionDisposable = term.onSelectionChange(rememberSpeakSelection);
-  const termBody = pane.querySelector('.term-body');
   termBody.addEventListener('pointerdown', () => speakSelectionMemory.clear(), true);
   const mouseSelectionFallback = window.ccTTSSelection.installMouseTrackingSelectionFallback({
     term,
@@ -641,12 +627,10 @@ function openInAppTerminal(opts = {}) {
     window.ccTTS.speak(action.text);
   };
   // V1a Copy Output — ONE shared path for every pane type, including Video Scout.
-  // Priority: a live pane-local selection wins; the pointer-down snapshot rescues a
-  // selection the header click (or a mouse-mode TUI) cleared between pointer-down and
-  // click — the same mechanism the 🔊 button uses; with no selection at all, the whole
-  // buffer + scrollback is reconstructed under the copy bound (term-copy.js).
+  // A live selection wins. A pointer click can also use the selection visible at the
+  // start of its own press, before the header takes focus. Otherwise use bounded scrollback.
   const copyBtn = pane.querySelector('.copy-out');
-  let selectionAtCopyPointerDown = '';
+  let copyPointer = null;
   let copyFlashTimer = null;
   const flashCopyBtn = (ok) => {
     copyBtn.textContent = ok ? '✓' : '⚠';
@@ -656,21 +640,24 @@ function openInAppTerminal(opts = {}) {
     copyFlashTimer = setTimeout(() => { copyBtn.textContent = '⧉'; copyBtn.classList.remove('flash-ok', 'flash-err'); }, 1400);
   };
   copyBtn.addEventListener('pointerdown', (event) => {
-    // Snapshot BEFORE the click can clear the selection (same rescue as the 🔊 button).
-    selectionAtCopyPointerDown = selectedTextInPane() || speakSelectionMemory.peek();
+    if (event.button !== 0) return;
+    copyPointer = { id: event.pointerId, selection: selectedTextInPane() };
     event.preventDefault();
     event.stopPropagation();
   });
+  copyBtn.addEventListener('pointercancel', () => { copyPointer = null; });
   copyBtn.onclick = (event) => {
     event.preventDefault();
     event.stopPropagation();
+    const snapshot = copyPointer && event.detail > 0 && event.pointerId === copyPointer.id
+      ? copyPointer.selection : '';
+    copyPointer = null;
     const result = window.ccTermCopy.resolveCopyRequest({
       selection: selectedTextInPane(),
-      snapshot: selectionAtCopyPointerDown,
+      snapshot,
       bound: window.ccTermCopy.COPY_OUTPUT_BOUND, // EVERY source is bounded — selections included
       reconstruct: () => window.ccTermCopy.reconstructBufferText(term.buffer.active, window.ccTermCopy.COPY_OUTPUT_BOUND),
     });
-    selectionAtCopyPointerDown = '';
     if (!result.ok) {
       // e.g. an empty pane — refuse visibly (⚠ flash + Logs), never a silent no-op.
       appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, failed: true, reason: result.reason }));
@@ -679,20 +666,22 @@ function openInAppTerminal(opts = {}) {
     }
     // The clipboard write is async IPC to main; do NOT report success until it RESOLVES
     // with { ok:true }. A rejection or { ok:false } flashes ⚠ + a metadata-only FAILED
-    // Logs line + an alert — never a false success. clip.writeText never rejects, and
-    // the trailing .catch is belt-and-suspenders against a future unhandled rejection.
+    // Logs line and an alert.
+    const clipboardFailed = (reason) => {
+      appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, failed: true, reason }));
+      flashCopyBtn(false);
+      alert(`Copy Output failed — nothing was copied.\n\n${reason}`);
+    };
     clip.writeText(result.text).then((res) => {
       if (!res.ok) {
-        appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, failed: true, reason: `clipboardWrite: ${res.error}` }));
-        flashCopyBtn(false);
-        alert(`Copy Output failed — nothing was copied.\n\n${res.error}`);
+        clipboardFailed(`clipboardWrite: ${res.error}`);
         return;
       }
       // Logs carry metadata only, by construction: buildCopyLogLine never receives the text.
       appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, copiedChars: result.copiedChars, totalChars: result.totalChars, truncated: result.truncated }));
       flashCopyBtn(true);
       if (result.truncated) alert(window.ccTermCopy.buildTruncationNotice({ copiedChars: result.copiedChars, totalChars: result.totalChars, role }));
-    }).catch(() => {});
+    }).catch(() => clipboardFailed('clipboardWrite: IPC failed'));
   };
   // MAXIMIZE ROUTES BY OWNERSHIP. Two maximizers exist and exactly one may run for a given pane:
   //   * the classic grid maximizer (pane-maximize.js), which hides the siblings inside
@@ -718,18 +707,20 @@ function openInAppTerminal(opts = {}) {
       openReportForPane(id);
     };
   }
-  const chatBody = pane.querySelector('.chat-body');
-  const paneData = { term, fit, pane, ro, roConnected: true, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
-  paneData.parser = new PtyParser((ev) => {
-    // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
-    // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
-    // line-buffered and ANSI-stripped, so chunk boundaries can't split the marker.
-    if (role === 'video-scout' && !claudeVideoScout && !ev.partial && ev.text && ev.text.includes('[video-scout usage]')) {
-      appendLog(ev.text.trim() + '\n');
-    }
-    paneData.pendingEvents.push(ev);
-    if (paneData.rafId === null) paneData.rafId = requestAnimationFrame(() => drainChatEvents(paneData));
-  });
+  // Xterm is the only terminal history view. The SDK Video Scout still needs the
+  // line-buffered, ANSI-stripped usage record in Logs, even when split across PTY chunks.
+  // The pane's other lines are model output, so only an exact usage line is copied
+  // (video-scout-usage-line.js).
+  const usageLogGate = (role === 'video-scout' && !claudeVideoScout)
+    ? window.ccVideoScoutUsage.createUsageLogGate() : null;
+  const usageParser = usageLogGate
+    ? new PtyParser((ev) => {
+        if (ev.partial || !ev.text) return;
+        const logLine = usageLogGate.consider(ev.text);
+        if (logLine) appendLog(logLine);
+      }, { completedLinesOnly: true, maxPendingChars: 4096 })
+    : null;
+  const paneData = { term, fit, pane, ro, roConnected: true, role, usageParser };
   // The ONE close path for this pane. Extracted from the close button's handler (behaviour and
   // ordering are unchanged) and made IDEMPOTENT so that a second caller cannot double-kill a PTY or
   // double-dispose an xterm. On the Dockview prototype branch a panel-removal event is that second
@@ -756,7 +747,6 @@ function openInAppTerminal(opts = {}) {
     try { selectionDisposable.dispose(); } catch {}
     try { mouseSelectionFallback.dispose(); } catch {}
     if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
-    if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     if (claudeVideoScout) {
       // Stop local Whisper too (Codex finding), so Dictate and the next run aren't left busy.
       if (window.ccSTT && window.ccSTT.cancelVideoTranscription) window.ccSTT.cancelVideoTranscription(id);
@@ -779,7 +769,6 @@ function openInAppTerminal(opts = {}) {
     try { selectionDisposable.dispose(); } catch {}
     try { mouseSelectionFallback.dispose(); } catch {}
     if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
-    if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
@@ -836,6 +825,7 @@ function openInAppTerminal(opts = {}) {
   // panel to strand and main already surfaces its own refusal through `main-error`.
   const onStartFailed = (reason) => {
     if (!terms.has(id)) return;             // the user closed it first — nothing to undo
+    term.options.disableStdin = true;
     appendLog(`[pty] start FAILED for ${id}: ${reason}`
       + (layoutInstance ? ' — removing the pane and its layout panel\n' : '\n'));
     if (layoutInstance) closeThisPane();
@@ -1387,6 +1377,36 @@ async function offerResume() {
   resumeView.render(offer.rows);
 }
 
+// ---- S46: the daily idle-sessions list -------------------------------------------------------------
+// Main lists every recorded Claude session with its owner, state, done-when and idle time, and
+// archives finished ones (app/session-hygiene.js). Checked at startup and every hour; the sessions
+// idle 3 days or more show once per local day. A failed read is logged, never hidden.
+const HYGIENE_CHECK_MS = 60 * 60 * 1000;
+let hygieneShownDay = null;
+let hygieneView = null;
+async function checkSessionHygiene() {
+  const host = $('#hygieneHost');
+  if (!host || !window.ccSessionHygieneView) return;
+  if (!hygieneView) {
+    hygieneView = window.ccSessionHygieneView.create({
+      document,
+      host,
+      roleLabel: (r) => (ROLES[r] ? ROLES[r].label : r),
+      onSaveDoneWhen: (row, text) => cc.sessionHygieneDoneWhen(row.sessionId, text),
+    });
+  }
+  let answer = null;
+  try { answer = await cc.sessionHygieneList(); } catch { answer = null; }
+  if (!answer || answer.ok !== true) {
+    appendLog(`[hygiene] could not read the session list: ${(answer && answer.error) || 'ipc-rejected'}\n`);
+    return;
+  }
+  if (!window.ccSessionHygieneView.shouldShow(hygieneShownDay, answer)) return;
+  hygieneShownDay = answer.day;
+  appendLog(`[hygiene] ${answer.idle.length} Claude session(s) idle ${answer.idleDays} days or more\n`);
+  hygieneView.render(answer.idle, answer.idleDays);
+}
+
 // ---- S66 shared navigation ------------------------------------------------------------------
 // The three-tab shell (shell-nav.js) wraps today's layout as the control room tab. If it can't
 // start, it says so in the Logs tab and the old layout stays the whole app (index.html keeps the
@@ -1534,6 +1554,10 @@ function startShell(settings) {
 }
 
 async function boot() {
+  // Listen before the first await: main sends its startup notices (credential store, issue #249)
+  // once the page has loaded, and ipcRenderer drops a message that arrives with no listener.
+  cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
+  cc.onMainInfo((m) => appendLog('\n[main] ' + m + '\n'));
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
   startShell(s);
@@ -1546,8 +1570,8 @@ async function boot() {
     state.authority = a.level;
     if (a.fellBack) appendLog(`[authority] stored level not recognised; using ${a.level}\n`);
   }
-  // Issue #161: a refused status check says why (main's own main-error line can arrive before the
-  // listener below exists) and shows the key banner, never a silent "no key".
+  // Issue #161: a refused status check says why (the reply carries the reason, so it doesn't depend
+  // on main's main-error line) and shows the key banner, never a silent "no key".
   updateKeyBanner(await geminiKeyStatusOrLog());
   // S06: not awaited, so the token check adds no IPC round trip to the boot path (pane startup is
   // timing-sensitive); a failed check leaves the banner showing and says so in the Logs tab.
@@ -1568,17 +1592,21 @@ async function boot() {
   appendLog(`[build] ${buildLabel}\n`);
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
-    if (t) { t.term.write(data); t.parser.feed(data); }
+    if (t) { t.term.write(data); t.usageParser?.feed(data); }
   });
   cc.onPtyExit(({ id }) => {
     const t = terms.get(id);
-    if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
+    if (t) {
+      t.term.options.disableStdin = true;
+      t.usageParser?.flush();
+      t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n');
+    }
   });
   cc.onClaudeVideoScoutEvent(handleClaudeVideoEvent);
-  cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
-  cc.onMainInfo((m) => appendLog('\n[main] ' + m + '\n'));
-  // S09: after the main-error listener, so a session-memory refusal or a refused Resume is shown.
+  // S09: the main-error listener (top of boot) is up, so a session-memory refusal or a refused Resume is shown.
   await offerResume();
+  await checkSessionHygiene();
+  setInterval(() => { checkSessionHygiene(); }, HYGIENE_CHECK_MS);
 
 // EXPERIMENT A — PROTOTYPE pane status (Claude only, one pane).
 // docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".
@@ -1727,35 +1755,52 @@ function installSTTUnavailableControl() {
 function setupSTTControls() {
   const stt = window.ccSTT; if (!stt) return;
   const micBtn = $('#sttMic');
-  if (micBtn && !micBtn.dataset.sttWired) {
-    micBtn.dataset.sttWired = '1';
-    micBtn.onclick = () => {
-      // Returns true when it sent a start or stop to the engine, false when it refused (push to
-      // talk reads this, so a refused start is never waited on).
-      if (stt.isRecording()) { stt.toggle(); return true; } // second click: stop + one finalized transcript
-      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); sttNotice('Still typing the last dictation. Try again in a moment.', 6000); return false; }
-      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); sttNotice('Dictation needs a pane: click into an agent pane in the control room first.', 8000); return false; }
-      // Lock the destination NOW: however long the model load takes, and whatever pane
-      // is clicked meanwhile, the finished transcript goes here or is refused visibly.
-      sttDictationTargetId = activeTermId;
-      const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
-      appendLog(`[stt] dictation started — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
-      stt.toggle(); // first click: recording starts immediately (model loads at stop time)
-      return true;
-    };
-  }
-  stt.onStatus(({ state: st, detail }) => {
+  const showStatus = ({ state: st, detail }) => {
     if (st === 'recording') sttNotice(`Recording for pane ${sttDictationTargetId || '?'}. Let go of Ctrl Space (or press Stop) to type it.`, 0);
     else if (st === 'transcribing') sttNotice('Transcribing…', 0);
     else if (st === 'error') sttNotice('Dictation failed. Details in Logs.', 8000);
     else if (st === 'idle') sttNotice('', 0);
     const el = $('#sttStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
     if (micBtn) { micBtn.textContent = st === 'recording' ? '⏺ Stop' : '🎤 Dictate'; micBtn.classList.toggle('rec', st === 'recording'); }
-    if (st === 'error' && detail) appendLog('[stt] ' + detail + '\n');
+    if (st === 'error') {
+      sttDictationTargetId = null;
+      if (detail) appendLog('[stt] ' + detail + '\n');
+    }
     // Last, and after this handler returns: a pending push-to-talk stop calls the engine, which
     // reports 'transcribing' at once; doing it here would let this 'recording' update overwrite it.
     if (pushToTalk) setTimeout(() => pushToTalk.onSttStatus(st), 0);
-  });
+  };
+  // start() and stopAndTranscribe() report their expected failures themselves; anything that
+  // still throws or rejects here is unexpected, so its reason is shown, never swallowed.
+  const reportToggleFailure = (e) => {
+    showStatus({ state: 'error', detail: stt.describeUnexpectedFailure(e) });
+  };
+  const runToggle = () => {
+    let pending;
+    try { pending = stt.toggle(); } catch (e) { reportToggleFailure(e); return false; }
+    Promise.resolve(pending).catch(reportToggleFailure);
+    return true;
+  };
+  if (micBtn && !micBtn.dataset.sttWired) {
+    micBtn.dataset.sttWired = '1';
+    micBtn.onclick = () => {
+      // Returns true when it sent a start or stop to the engine, false when it refused (push to
+      // talk reads this, so a refused start is never waited on). The click itself stays
+      // synchronous; the engine's promise is watched by runToggle.
+      if (stt.isStarting()) { appendLog('[stt] still waiting for the microphone…\n'); return false; } // #232: one request
+      if (stt.isRecording()) return runToggle(); // second click: stop + one finalized transcript
+      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); sttNotice('Still typing the last dictation. Try again in a moment.', 6000); return false; }
+      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); sttNotice('Dictation needs a pane: click into an agent pane in the control room first.', 8000); return false; }
+      // Lock the destination NOW, before the microphone is requested: however long the
+      // permission prompt or model load takes, and whatever pane is clicked meanwhile, the
+      // finished transcript goes here or is refused visibly.
+      sttDictationTargetId = activeTermId;
+      const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
+      appendLog(`[stt] dictation requested — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
+      return runToggle(); // first click: recording starts once the microphone opens (model loads at stop time)
+    };
+  }
+  stt.onStatus(showStatus);
   stt.onResult((text) => {
     const targetId = sttDictationTargetId;
     sttDictationTargetId = null;
@@ -1798,8 +1843,19 @@ function setupTTSControls() {
   });
 }
 
+let repoChangeGeneration = 0;
+let worktreeRefreshGeneration = 0;
+// The repo whose last agent refresh failed ('' when it succeeded); the cards show it, not "No agents".
+let agentRefreshFailedFor = '';
+
 async function refreshRepos() {
-  const { repos, selectedRepo } = await cc.listRepos();
+  const generation = repoChangeGeneration;
+  let response;
+  try { response = await cc.listRepos(); }
+  catch (e) { appendLog(`[repositories] list failed: ${e?.message || e}\n`); return; }
+  if (generation !== repoChangeGeneration) return;
+  if (!Array.isArray(response?.repos)) { appendLog('[repositories] list refused: invalid response\n'); return; }
+  const { repos, selectedRepo } = response;
   const sel = $('#repoSelect');
   sel.innerHTML = '';
   if (repos.length === 0) {
@@ -1814,24 +1870,65 @@ async function refreshRepos() {
     o.textContent = r.split(/[\\/]/).pop();
     sel.appendChild(o);
   }
-  state.repo = repos.includes(selectedRepo) ? selectedRepo : (repos[0] || '');
-  sel.value = state.repo;
-  await onRepoChange();
+  const repo = repos.includes(selectedRepo) ? selectedRepo : (repos[0] || '');
+  sel.value = repo;
+  await onRepoChange(repo);
 }
 
-async function onRepoChange() {
+async function onRepoChange(repo) {
+  const generation = ++repoChangeGeneration;
+  const github = $('#openGithub');
+  if (repo !== state.repo) {
+    state.repo = repo;
+    state.githubUrl = '';
+    state.worktrees = [];
+    agentRefreshFailedFor = '';
+    renderAgentList();
+    renderAgentGrid();
+  }
   if (shell) shell.refreshScope();   // S66: the scope stripe names the repo in use
   refreshEmblemRail();
-  await cc.saveSettings({ selectedRepo: state.repo });
-  state.githubUrl = state.repo ? await cc.repoGithubUrl(state.repo) : '';
-  await refreshAgents();
+  github.disabled = !state.githubUrl;
+  const agents = refreshAgents();
+  const saved = cc.saveSettings({ selectedRepo: repo }).catch((e) => {
+    appendLog(`[repositories] could not save the selection: ${e?.message || e}\n`);
+  });
+  let url = '';
+  try {
+    if (repo) url = await cc.repoGithubUrl(repo);
+  } catch (e) {
+    appendLog(`[repositories] could not read the GitHub link: ${e?.message || e}\n`);
+  }
+  if (generation === repoChangeGeneration && repo === state.repo) {
+    state.githubUrl = url;
+    github.disabled = !url;
+  }
+  await Promise.all([saved, agents]);
 }
 
 // ---- agents -----------------------------------------------------------------
 async function refreshAgents() {
+  const repo = state.repo;
+  const generation = ++worktreeRefreshGeneration;
   appendLog('[TIMING] refreshAgents: listWorktrees START\n');
-  const all = state.repo ? await cc.listWorktrees(state.repo) : [];
+  let all;
+  let failure = '';
+  try { all = repo ? await cc.listWorktrees(repo) : []; }
+  catch (e) { failure = `could not refresh agents: ${e?.message || e}`; }
+  if (!failure && !Array.isArray(all)) failure = 'agent refresh refused: invalid response';
+  if (failure) {
+    appendLog(`[repositories] ${failure}\n`);
+    // Only the newest refresh of the selected repo may change what the cards say. An empty list
+    // after a failure must not look like a repo with no agents, so the cards name the failure.
+    if (generation !== worktreeRefreshGeneration || repo !== state.repo) return;
+    agentRefreshFailedFor = repo;
+    renderAgentList();
+    renderAgentGrid();
+    return;
+  }
   appendLog(`[TIMING] refreshAgents: listWorktrees END (${all.length} items)\n`);
+  if (generation !== worktreeRefreshGeneration || repo !== state.repo) return;
+  agentRefreshFailedFor = '';
   // The first worktree is the main checkout; the rest are agents.
   state.worktrees = all.filter((w) => !w.branch || w.branch !== 'main');
   renderAgentList();
@@ -1860,9 +1957,18 @@ function agentColorOf(wt) {
   return 'claude';
 }
 
+// The repo path comes from disk, so it is set as text, never as HTML.
+function agentRefreshFailedNote(className) {
+  const note = document.createElement('div');
+  note.className = className;
+  note.textContent = `Could not list agents for ${agentRefreshFailedFor.split(/[\\/]/).pop()}; see Logs.`;
+  return note;
+}
+
 function renderAgentList() {
   const list = $('#agentList');
   if (state.worktrees.length === 0) {
+    if (agentRefreshFailedFor) { list.innerHTML = ''; list.appendChild(agentRefreshFailedNote('empty')); return; }
     list.innerHTML = '<div class="empty">No agents yet. Click <b>+ New</b>.</div>';
     return;
   }
@@ -1884,6 +1990,7 @@ function renderAgentGrid() {
   const grid = $('#agentGrid');
   grid.innerHTML = '';
   if (state.worktrees.length === 0) {
+    if (agentRefreshFailedFor) { grid.appendChild(agentRefreshFailedNote('empty muted')); return; }
     grid.innerHTML = '<div class="empty muted">No active agents. Use <b>+ New</b> in the sidebar.</div>';
     return;
   }
@@ -1966,20 +2073,73 @@ function updateAgentTokenBanner(status) {
 }
 
 // ---- logs -------------------------------------------------------------------
-function appendLog(text) {
-  const maxLogChars = 128 * 1024;
-  const trimNotice = '[Earlier log output truncated]\n';
+const LOG_TEXT_LIMIT = 128 * 1024;
+const LOG_PENDING_LIMIT = LOG_TEXT_LIMIT + 4096;
+const LOG_TRUNCATED = '[Older log output truncated]\n';
+let visibleLogText = '';
+let pendingLogText = '';
+let pendingLogTruncated = false;
+let logTruncated = false;
+let logFrame = null;
+let followLogTail = true;
+
+function logsAtBottom(log) {
+  return log.scrollHeight - log.clientHeight - log.scrollTop <= 1;
+}
+
+function trimmedLogPrefix(text) {
+  const overflow = text.length - LOG_TEXT_LIMIT;
+  if (overflow <= 0) return 0;
+  // Prefer a whole-line boundary if nearby. A single long line still has a hard bound.
+  const newline = text.slice(overflow - 1, overflow + 1024).indexOf('\n');
+  if (newline >= 0 && overflow + newline < text.length) return overflow + newline;
+  const first = text.charCodeAt(overflow);
+  return first >= 0xdc00 && first <= 0xdfff ? overflow + 1 : overflow;
+}
+
+function logTextTop(log, offset) {
+  const range = document.createRange();
+  range.setStart(log.firstChild, offset);
+  range.collapse(true);
+  return range.getBoundingClientRect().top + log.scrollTop;
+}
+
+function flushLogs() {
+  logFrame = null;
   const log = $('#logView');
-  const contents = log.textContent + text;
-  log.textContent = contents.length <= maxLogChars
-    ? contents
-    : trimNotice + contents.slice(-(maxLogChars - trimNotice.length));
-  log.scrollTop = log.scrollHeight;
+  const visible = log.clientHeight > 0;
+  const atBottom = visible && logsAtBottom(log);
+  const combined = pendingLogTruncated ? pendingLogText : visibleLogText + pendingLogText;
+  const trim = trimmedLogPrefix(combined);
+  const dropped = pendingLogTruncated ? visibleLogText.length : trim;
+  const scrollTop = log.scrollTop;
+  // Measure the first surviving character's position before and after removing the prefix.
+  // This keeps the same content in view when the log wraps.
+  const anchor = visible && !atBottom && dropped > 0 && dropped < visibleLogText.length
+    ? logTextTop(log, (logTruncated ? LOG_TRUNCATED.length : 0) + dropped) : null;
+  logTruncated ||= pendingLogTruncated || trim > 0;
+  visibleLogText = combined.slice(trim);
+  pendingLogText = '';
+  pendingLogTruncated = false;
+  log.textContent = (logTruncated ? LOG_TRUNCATED : '') + visibleLogText;
+  if (!visible) return;
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  else if (anchor !== null) log.scrollTop = Math.max(0, scrollTop + logTextTop(log, LOG_TRUNCATED.length) - anchor);
+  else log.scrollTop = dropped ? 0 : scrollTop;
+}
+
+function appendLog(text) {
+  pendingLogText += text;
+  if (pendingLogText.length > LOG_PENDING_LIMIT) {
+    pendingLogText = pendingLogText.slice(trimmedLogPrefix(pendingLogText));
+    pendingLogTruncated = true;
+  }
+  if (logFrame === null) logFrame = requestAnimationFrame(flushLogs);
 }
 
 // ---- wiring -----------------------------------------------------------------
 function wireUi() {
-  $('#repoSelect').onchange = (e) => { state.repo = e.target.value; onRepoChange(); };
+  $('#repoSelect').onchange = (e) => onRepoChange(e.target.value);
   $('#themeSelect').onchange = (e) => applyTheme(e.target.value);
   {
     // S10: one click sets the authority for every Claude pane started after it (not running ones).
@@ -2447,7 +2607,6 @@ function writeClaudeVideoPane(id, text) {
   // characters, tabs, and newlines to xterm so the report can't emit controls.
   const data = text.replace(/\r\n/g, '\n').replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '').replace(/\n/g, '\r\n');
   pane.term.write(data + '\r\n');
-  pane.parser.feed(data + '\r\n');
 }
 
 // S54 settings (D-065). Each default is a setting the user can change; the values are remembered

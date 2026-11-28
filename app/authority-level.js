@@ -32,29 +32,18 @@ const PERMISSION_MODE = Object.freeze({
 });
 const LOCAL_PERMISSION_MODES = Object.freeze(new Set(Object.values(PERMISSION_MODE)));
 
-// S31 item 1. Every Claude pane runs with CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 (AGENTS.md "Security
-// rules"), and with the scrub set Claude Code forces the permission mode to `default` ("Permission
-// mode forced to default - CLAUDE_CODE_SUBPROCESS_ENV_SCRUB is set ... Declare allowedTools
-// explicitly", seen on Blue's PC with Claude Code 2.1.316, checklist step 40). `--allowedTools` is
-// still honored, so each level also carries an explicit, main-owned set of tools that run without a
-// prompt; anything not listed still asks. The scrub stays on: turning it off is Blue's call.
-// Rule syntax: Claude Code's permission rules (`Tool` or `Bash(prefix:*)`). docs/AUTHORITY-LEVELS.md
-// lists the same sets for Blue.
+// S31 item 1. With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Claude Code 2.1.316 reported that it
+// forced default mode and requested explicit allowed tools (checklist step 40). Each local level
+// passes an explicit set. Claude Code's handling of --allowedTools under the scrub is unverified.
 const READ_TOOLS = Object.freeze(['Read', 'Glob', 'Grep', 'TodoWrite']);
 const EDIT_TOOLS = Object.freeze(['Edit', 'Write', 'NotebookEdit']);
-// High: edits plus local git commands that change only the repository. Never `git push` or
-// `git fetch` (`--upload-pack=<command>` runs any command), never `npm test`/`npm ci` (an edited
-// package.json script or lockfile would run unasked), never a general interpreter such as `node:*`.
-// `git status`, `diff`, `log` and `show` aren't listed: Claude Code already runs their read-only forms
-// without asking, and an explicit rule would also cover flags such as `--output=<file>`. Hooks and
-// git config sit in Claude Code's protected paths (.git), so editing them still asks.
-const HIGH_BASH = Object.freeze([
-  'Bash(git branch:*)', 'Bash(git switch:*)', 'Bash(git add:*)', 'Bash(git commit:*)',
-]);
+const READ_AND_EDIT_TOOLS = Object.freeze(READ_TOOLS.concat(EDIT_TOOLS));
+// Bash commands use Claude Code's normal permission flow at every level. In particular, commit
+// and switch can run hooks regardless of which directory the repository uses for them.
 const ALLOWED_TOOLS = Object.freeze({
-  [LEVEL.MINIMUM]: Object.freeze(READ_TOOLS.slice()),
-  [LEVEL.MEDIUM]: Object.freeze(READ_TOOLS.concat(EDIT_TOOLS)),
-  [LEVEL.HIGH]: Object.freeze(READ_TOOLS.concat(EDIT_TOOLS, HIGH_BASH)),
+  [LEVEL.MINIMUM]: READ_TOOLS,
+  [LEVEL.MEDIUM]: READ_AND_EDIT_TOOLS,
+  [LEVEL.HIGH]: READ_AND_EDIT_TOOLS,
 });
 // Minimum means "no edits" (AGENTS.md). Under the forced default mode the edit tools are denied
 // outright, so they can't be approved by a stray click. Shell commands still ask, and an approved one

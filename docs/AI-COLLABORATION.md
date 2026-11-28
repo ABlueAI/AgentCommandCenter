@@ -30,8 +30,9 @@ Rules for all agents are in [AGENTS.md](../AGENTS.md). This page is the short ve
   (docs/CODEX-BUILDER-LANE.md item 1; docs/DECISIONS.md 2026-11-25, "Codex's lane, reworded"), reviewer of the UI sessions Claude builds, planning partner. AGENTS.md "Who does what" is the full version.
 - Reads the same files Claude reads (`AGENTS.md`, `STATUS.md`, `docs/PLAN-1.1.md`,
   `docs/DECISIONS.md`). Proposes plan changes as PRs, not as chat to be copied.
-- Never shares a worktree or branch with Claude: Codex fixes its own PRs, and Claude pushes to a
-  `codex/` branch only when Blue asks.
+- Never shares a worktree with Claude, and builds only on its own `codex/` branches. Claude fixes
+  every Codex PR's findings and conflicts on that branch, one fixer at a time (Blue, 2026-11-27,
+  D-092; docs/CODEX-BUILDER-LANE.md item 6), and otherwise never pushes to a `codex/` branch.
 
 ## Shared memory
 
