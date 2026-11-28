@@ -372,9 +372,13 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // `window.ccSessionHygieneView` and builds into #hygieneHost only when app.js asks it to.
   // Issue #358 adds the Video Scout usage-line gate: 35 -> 36. `video-scout-usage-line.js` publishes
   // `window.ccVideoScoutUsage` and touches no DOM.
-  assert(scriptTags === 36, `index.html loads exactly 36 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, the idle-sessions view (S46) and the Video Scout usage-line gate (#358) (found ${scriptTags})`);
+  // S47 adds the branch status view: 36 -> 37. `branch-status-view.js` publishes
+  // `window.branchStatusView` (pure text, no DOM) for the agent cards and sidebar rows.
+  assert(scriptTags === 37, `index.html loads exactly 37 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, the idle-sessions view (S46), the Video Scout usage-line gate (#358) and the branch status view (S47) (found ${scriptTags})`);
   assert(/<script src="video-scout-usage-line\.js"><\/script>/.test(indexSrc),
     'the #358 Video Scout usage-line gate is loaded');
+  assert(/<script src="branch-status-view\.js"><\/script>/.test(indexSrc),
+    'the S47 branch status view is loaded');
   assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),
     'the S09 resume view is loaded');
   assert(/<script src="session-hygiene-view\.js"><\/script>/.test(indexSrc),

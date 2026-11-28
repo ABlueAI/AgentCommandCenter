@@ -34,6 +34,9 @@ const { createNavGuards } = require('./nav-guard');
 // whole pty-start handler is asserted by launcher-fence-invariant.test.js.
 const { resolveVscodeExe, resolveTerminalExe } = require('./launchers');
 const { createLauncherAuthorizer } = require('./launcher-authz');
+const {
+  answerBranchStatus, listAuthorizedDirs: listBranchStatusDirs, gitEnv: branchStatusGitEnv, MAX_PATHS: BRANCH_STATUS_MAX_PATHS,
+} = require('./branch-status');
 // The launcher IPC boundary: gate -> authorize -> resolve exe -> shell-free spawn. Pure + unit-tested
 // (launcher-ipc.test.js); an untrusted sender or unauthorized dir spawns zero children.
 const { createLauncherIpc } = require('./launcher-ipc');
@@ -1554,6 +1557,39 @@ handleTrustedIpc('review-diff', async (request) => {
   catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
   const files = (diff.match(/^diff --git /gm) || []).length;
   return { ok: true, fileName, files, bytes: diff.length };
+});
+
+// S47 piece 3: the branch status (branch, upstream, ahead/behind, changed files) of every agent the
+// renderer shows, in one call. Each path is membership-checked against the repo roots and live
+// worktrees under projectsRoot, the rule the one-click launchers use (launcher-authz.js), so the
+// renderer can't point git at an arbitrary folder. The set is listed asynchronously, once per call
+// (this runs on a 20-second poll, so it never blocks main), and each folder's real path is resolved
+// once per call. git runs with a minimal environment and no fsmonitor (branch-status.js). Every
+// refusal and failure comes back as { ok: false, error, detail? } in that path's slot and the card
+// says "status unavailable"; none is reported as clean.
+handleTrustedIpc('worktree-branch-status', async (worktrees) => {
+  if (!Array.isArray(worktrees) || worktrees.length > BRANCH_STATUS_MAX_PATHS) {
+    throw new Error(reportIpcRefusal('worktree-branch-status', `invalid-worktree-list (an array of at most ${BRANCH_STATUS_MAX_PATHS} paths)`));
+  }
+  const env = branchStatusGitEnv(process.env);
+  return answerBranchStatus({
+    listAuthorizedDirs: () => {
+      let projectsRoot = null;
+      try { projectsRoot = loadSettings().projectsRoot; }
+      catch (e) { return { dirs: [], failures: [{ step: 'settings', detail: String((e && e.message) || e).slice(0, 300) }] }; }
+      return listBranchStatusDirs({ projectsRoot, readdir: fs.promises.readdir, exists: fs.existsSync, execFile, env });
+    },
+    createAuthorizer: (listFn) => {
+      const real = new Map();
+      return createLauncherAuthorizer({
+        realpath: (p) => { if (!real.has(p)) { try { real.set(p, fs.realpathSync.native(p)); } catch (e) { real.set(p, e); } } const r = real.get(p); if (r instanceof Error) throw r; return r; },
+        isDirectory: (p) => fs.statSync(p).isDirectory(),
+        listAuthorizedDirs: listFn,
+      });
+    },
+    execFile,
+    env,
+  }, worktrees);
 });
 
 // ---- IPC: one-click launchers ----------------------------------------------

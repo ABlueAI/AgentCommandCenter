@@ -1649,6 +1649,8 @@ async function boot() {
   await offerResume();
   await checkSessionHygiene();
   setInterval(() => { checkSessionHygiene(); }, HYGIENE_CHECK_MS);
+  // S47: keep each agent's branch status current while the window is in view.
+  setInterval(() => { if (!document.hidden) refreshBranchStatuses(); }, BRANCH_STATUS_POLL_MS);
 
 // EXPERIMENT A — PROTOTYPE pane status (Claude only, one pane).
 // docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".
@@ -1981,8 +1983,37 @@ async function refreshAgents() {
   agentRefreshFailedFor = '';
   // Git lists the primary checkout first, regardless of its branch.
   state.worktrees = all.slice(1);
+  branchStatusNodes = new Map();
   renderAgentList();
   renderAgentGrid();
+  refreshBranchStatuses();
+}
+
+// ---- S47 piece 3: branch status per agent --------------------------------------
+// Each agent's card and sidebar row carry a .branch-status line ("↑2 ↓1 · 3 changed"). Main reads
+// them with a lock-free `git status --porcelain=v2` (app/branch-status.js), for paths it checks
+// itself; the renderer only asks and shows. The refresh loop (one at a time, batches of 64, each
+// failure logged once per reason) is createBranchStatusPoller in branch-status-view.js.
+const BRANCH_STATUS_POLL_MS = 20000;
+let branchStatusNodes = new Map();          // worktree path -> [.branch-status nodes]
+const branchStatusPoller = branchStatusView.createBranchStatusPoller({
+  ask: (paths) => cc.worktreeBranchStatus(paths),
+  // Look the nodes up when the answer arrives: a re-render meanwhile replaced them.
+  apply: (wtPath, view) => { for (const node of branchStatusNodes.get(wtPath) || []) agentDom.applyBranchStatus(node, view); },
+  log: (line) => appendLog(line + '\n'),
+  maxBatch: 64,
+});
+
+function trackBranchStatusNode(wtPath, root) {
+  const node = root.querySelector('.branch-status');
+  if (!node) return;
+  const list = branchStatusNodes.get(wtPath) || [];
+  list.push(node);
+  branchStatusNodes.set(wtPath, list);
+}
+
+function refreshBranchStatuses() {
+  return branchStatusPoller.refresh([...branchStatusNodes.keys()]);
 }
 
 // The task slug for an app-created worktree, whose folder is named "<repo>-<task>". Returns null
@@ -2032,6 +2063,7 @@ function renderAgentList() {
       colorClass: agentColorOf(wt), name: displayNameOf(wt), path: wt.path, removable: !!task,
     });
     if (task) row.querySelector('.x').onclick = () => removeAgent(task);
+    trackBranchStatusNode(wt.path, row);
     list.appendChild(row);
   }
 }
@@ -2063,6 +2095,7 @@ function renderAgentGrid() {
         else if (act === 'rm') { if (task) removeAgent(task); } // disabled button won't fire; guard anyway
       };
     });
+    trackBranchStatusNode(wt.path, card);
     grid.appendChild(card);
   }
 }

@@ -141,6 +141,7 @@ function setup(overrides = {}) {
   const context = vm.createContext({
     window, document, cc, Terminal, PtyParser: require('./pty-parser').PtyParser,
     agentDom: require('./agent-dom'),
+    branchStatusView: require('./branch-status-view'),
     videoModelPolicy: require('./video-model-policy'),
     FitAddon: { FitAddon: class { fit() {} } },
     WebLinksAddon: { WebLinksAddon: addon },

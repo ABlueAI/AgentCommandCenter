@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('cc', {
   newAgent: (a) => ipcRenderer.invoke('new-agent', a),
   removeAgent: (a) => ipcRenderer.invoke('remove-agent', a),
   reviewDiff: (a) => ipcRenderer.invoke('review-diff', a),
+  // S47: the branch status (ahead/behind, changed files) of a list of worktrees, in the same order;
+  // main checks every path.
+  worktreeBranchStatus: (worktrees) => ipcRenderer.invoke('worktree-branch-status', worktrees),
   ensureOutputDir: (a) => ipcRenderer.invoke('ensure-output-dir', a),
   // S15: check a page URL and prepare the fenced page-reader folder (main writes the URL into it).
   pageReaderPrepare: (a) => ipcRenderer.invoke('page-reader-prepare', a),

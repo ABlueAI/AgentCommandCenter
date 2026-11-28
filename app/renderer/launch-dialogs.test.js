@@ -116,6 +116,7 @@ function renderer(ipc = {}) {
     },
     cc: { tlogReset: async () => {}, ...ipc },
     agentDom: { buildTermPane: terminalPane },
+    branchStatusView: require('./branch-status-view'),
     analysisFocus: require('./analysis-focus'),
     videoModelPolicy: require('./video-model-policy'),
     videoRangeUi: require('./video-range-ui'),

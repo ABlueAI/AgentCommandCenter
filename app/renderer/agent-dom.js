@@ -101,6 +101,8 @@ function buildAgentRow(doc, opts) {
   const row = el(doc, 'div', { className: 'agent-row' });
   row.appendChild(el(doc, 'span', { className: `dot ${opts.colorClass}` }));
   row.appendChild(el(doc, 'span', { className: 'name', text: opts.name, title: opts.path }));
+  // S47: the branch status slot, filled later by applyBranchStatus (app.js polls main for it).
+  row.appendChild(buildBranchStatus(doc));
   // removable === false => folder isn't <repo>-<task>, so there is no app-derivable task name to send
   // to remove-agent (finding M1). Disable the control with a CLI-recovery tooltip instead of wiring a
   // name the main process would (correctly) refuse anyway.
@@ -126,6 +128,7 @@ function buildAgentCard(doc, opts) {
   card.appendChild(title);
 
   card.appendChild(el(doc, 'div', { className: 'meta', text: opts.path }));
+  card.appendChild(buildBranchStatus(doc, 'div'));
 
   const mkBtn = (cls, act, text, tip, attrs) =>
     el(doc, 'button', { className: cls, text, title: tip, attrs: Object.assign({ 'data-act': act }, attrs || {}) });
@@ -155,6 +158,23 @@ function buildAgentCard(doc, opts) {
   return card;
 }
 
-const api = { el, buildBadge, buildTermPane, buildAgentRow, buildAgentCard };
+// S47 piece 3: an agent's branch status line ("↑2 ↓1 · 3 changed"), empty until its first read.
+// data-state carries the view's state (clean / changed / conflict / error / loading) for the CSS.
+const BRANCH_STATES = new Set(['clean', 'changed', 'conflict', 'error', 'loading']);
+function buildBranchStatus(doc, tag) {
+  return el(doc, tag || 'span', { className: 'branch-status', attrs: { 'data-state': 'loading' } });
+}
+// Fill a .branch-status node from a branch-status-view.js view. The text and title come from git
+// (branch and upstream names), so they go in through textContent and setAttribute only; an unknown
+// state is refused rather than written into an attribute the CSS keys on.
+function applyBranchStatus(node, view) {
+  if (!node || !view) return;
+  const state = BRANCH_STATES.has(view.state) ? view.state : 'error';
+  node.textContent = view.text == null ? '' : String(view.text);
+  node.setAttribute('title', view.title == null ? '' : String(view.title));
+  node.setAttribute('data-state', state);
+}
+
+const api = { el, buildBadge, buildTermPane, buildAgentRow, buildAgentCard, buildBranchStatus, applyBranchStatus };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else window.agentDom = api;
