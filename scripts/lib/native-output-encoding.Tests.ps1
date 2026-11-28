@@ -158,11 +158,11 @@ Describe 'V5b1 native-output decoding: feed-gemini.ps1 source wiring' {
     It 'dot-sources the shared native-output encoding helper' {
         $src | Should Match 'get-native-output-encoding\.ps1'
     }
-    It 'scopes UTF-8 output encoding around BOTH native captures (SDK + CLI)' {
-        ([regex]::Matches($src, '\[Console\]::OutputEncoding = New-NativeOutputEncoding')).Count | Should Be 2
-    }
-    It 'restores the previous console encoding in a finally on BOTH routes' {
-        ([regex]::Matches($src, '\[Console\]::OutputEncoding = \$prevOutputEncoding')).Count | Should Be 2
+    It 'scopes console encoding for the SDK and uses a UTF-8 child stream for the CLI' {
+        ([regex]::Matches($src, '\[Console\]::OutputEncoding = New-NativeOutputEncoding')).Count | Should Be 1
+        ([regex]::Matches($src, '\[Console\]::OutputEncoding = \$prevOutputEncoding')).Count | Should Be 1
+        $launcher = Get-Content -LiteralPath (Join-Path $here 'invoke-video-scout-process.ps1') -Raw
+        $launcher | Should Match 'StandardOutputEncoding = \[System.Text.Encoding\]::UTF8'
     }
     It 'sets UTF-8 encoding BEFORE invoking node on the SDK route' {
         $setIdx  = $src.IndexOf('[Console]::OutputEncoding = New-NativeOutputEncoding')

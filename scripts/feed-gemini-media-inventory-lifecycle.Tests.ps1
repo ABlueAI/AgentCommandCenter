@@ -13,6 +13,7 @@
 #>
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $feedGemini = Join-Path $here 'feed-gemini.ps1'
+. (Join-Path $here 'test-fixtures\video-scout-native-stub.ps1')
 $YT = 'https://youtu.be/aqz-KE-bpKQ'
 $NONYT = 'https://vimeo.com/76979871'
 
@@ -55,14 +56,16 @@ if ($env:VS_STUB_EXTRA -eq '1') { Set-Content -LiteralPath (Join-Path $runDir 'U
 if ($env:VS_STUB_READONLY_MANIFEST -eq '1') { Set-ItemProperty -LiteralPath (Join-Path $runDir 'manifest.json') -Name IsReadOnly -Value $true }
 "[yt-dlp-stub] wrote $name"
 '@ | Set-Content -LiteralPath (Join-Path $commonBin 'yt-dlp.ps1') -Encoding ASCII
+Install-VideoScoutNativeStub (Join-Path $commonBin 'yt-dlp.ps1')
 
-# gemini.ps1: the CLI FALLBACK shim (analysis output for the CLI route).
+# gemini.ps1: the CLI fallback executable (analysis output for the CLI route).
 @'
 $mode = $env:VS_STUB_MODE
 $code = if ($env:VS_STUB_EXIT) { [int]$env:VS_STUB_EXIT } else { 0 }
 if ($mode -ne 'empty') { Write-Output 'CLI-ANALYSIS-MARKER: TLDR first.'; Write-Output 'More analysis.' }
 exit $code
 '@ | Set-Content -LiteralPath (Join-Path $fallbackBin 'gemini.ps1') -Encoding ASCII
+Install-VideoScoutNativeStub (Join-Path $fallbackBin 'gemini.ps1')
 
 function New-RunId {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
@@ -88,6 +91,9 @@ function Invoke-Feed {
     function global:Stop-Job    { }
     function global:Remove-Job  { }
     $savedPath = $env:PATH
+    # The CLI route refuses to launch Gemini without a key; a fixture value stands in for it.
+    $savedKey = $env:GEMINI_API_KEY
+    $env:GEMINI_API_KEY = 'fixture-gemini-key'
     $env:VS_PROBE_LINE = $ProbeLine
     $env:VS_STUB_MODE = $StubMode
     $env:VS_STUB_EXIT = "$StubExit"
@@ -96,6 +102,7 @@ function Invoke-Feed {
     if ($ExtraSibling) { $env:VS_STUB_EXTRA = '1' } else { Remove-Item Env:\VS_STUB_EXTRA -ErrorAction SilentlyContinue }
     $env:PATH = (($ExtraPathBins + $commonBin) -join ';') + ';' + $savedPath
     try {
+        Write-VideoScoutFixtureEnvironment -OutputRoot $outDir -Names 'VS_STUB_MODE', 'VS_STUB_EXIT', 'VS_STUB_NO_OUTPUT', 'VS_STUB_READONLY_MANIFEST', 'VS_STUB_EXTRA'
         $p = @{ OutDir = $outDir } + $Params
         $text = ''
         try { $text = (& $feedGemini @p 6>&1 2>&1 | Out-String -Width 32767) }
@@ -119,6 +126,8 @@ function Invoke-Feed {
     }
     finally {
         $env:PATH = $savedPath
+        if ($null -eq $savedKey) { Remove-Item Env:\GEMINI_API_KEY -ErrorAction SilentlyContinue }
+        else { $env:GEMINI_API_KEY = $savedKey }
         Remove-Item Env:\VS_STUB_MODE, Env:\VS_STUB_EXIT, Env:\VS_STUB_NO_OUTPUT, Env:\VS_STUB_READONLY_MANIFEST, Env:\VS_STUB_EXTRA, Env:\VS_PROBE_LINE -ErrorAction SilentlyContinue
         'Start-Job', 'Wait-Job', 'Receive-Job', 'Stop-Job', 'Remove-Job' |
             ForEach-Object { Remove-Item "function:global:$_" -ErrorAction SilentlyContinue }
@@ -229,11 +238,9 @@ Describe 'V5c1 ordering source guard' {
 
     It 'records the media artifact BEFORE invoking Gemini on the CLI route' {
         $recordIdx = $src.IndexOf('Add-VideoScoutMediaArtifact -RunDir $runDir -File $file')
-        $nodeIdx = $src.IndexOf('& $nodeExe $geminiJs')
-        $shimIdx = $src.IndexOf('& $gemini -m $Model')
+        $launchIdx = $src.IndexOf('Invoke-VideoScoutProcess -Executable $geminiExe')
         ($recordIdx -gt 0) | Should Be $true
-        ($nodeIdx -gt $recordIdx) | Should Be $true
-        ($shimIdx -gt $recordIdx) | Should Be $true
+        ($launchIdx -gt $recordIdx) | Should Be $true
     }
     It 'the SDK route never records a media artifact (no recorder call before the SDK node invocation)' {
         # The recorder is only in the CLI download section; the SDK branch returns earlier.

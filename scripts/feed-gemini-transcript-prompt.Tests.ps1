@@ -21,6 +21,7 @@
 #>
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $feedGemini = Join-Path $here 'feed-gemini.ps1'
+. (Join-Path $here 'test-fixtures\video-scout-native-stub.ps1')
 $YT = 'https://youtu.be/aqz-KE-bpKQ'
 $en = [char]0x2013
 
@@ -41,6 +42,7 @@ $cue = "1`r`n00:00:01,000 --> 00:00:03,500`r`nHello from the fake captions.`r`n"
 Set-Content -LiteralPath $srt -Value $cue -Encoding ASCII
 "[yt-dlp-stub] wrote $srt"
 '@ | Set-Content -LiteralPath (Join-Path $stubRoot 'yt-dlp.ps1') -Encoding ASCII
+Install-VideoScoutNativeStub (Join-Path $stubRoot 'yt-dlp.ps1')
 
 function Invoke-TranscriptNoFeed {
     param([string]$CustomPrompt)
@@ -140,8 +142,9 @@ Describe 'adjacent defaults untouched (source-scope guards)' {
     }
 
     It 'keeps the SRT download flags unchanged' {
-        $src | Should Match '--write-auto-subs --write-subs'
-        $src | Should Match '--convert-subs srt'
+        # The flags are now one argv array per mode (no shell line), so pin them as array elements.
+        $src | Should Match "'--write-auto-subs',\s*'--write-subs'"
+        $src | Should Match "'--convert-subs',\s*'srt'"
     }
 
     It 'wires the transcript helper only inside the no-custom-prompt default switch' {

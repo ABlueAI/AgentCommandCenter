@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Download a video/link with yt-dlp and feed it straight to the Gemini CLI.
 .DESCRIPTION
@@ -81,6 +81,13 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+foreach ($value in @{ Url = $Url; OutDir = $OutDir; Model = $Model; Lang = $Lang; Prompt = $Prompt }.GetEnumerator()) {
+    if ($value.Value -and ([string]$value.Value).TrimStart().StartsWith('-')) {
+        throw "Video Scout -$($value.Key) must not start with a dash. Launch refused."
+    }
+}
+$OutDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutDir)
+
 # --- section-scoping offset validation: REFUSE, never silently downgrade ------------------------
 # Invariant (mirrors app/video-scout-args.js and the main-process refusal in app/main.js): a caller
 # who asked for a [StartOffset, EndOffset] slice must NEVER be silently downgraded to -- and billed
@@ -161,9 +168,7 @@ $ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe 
 # (write-video-scout-report.ps1) persists analysis-output.txt BEFORE the manifest is completed.
 . (Join-Path $PSScriptRoot 'lib\get-bounded-report.ps1')
 . (Join-Path $PSScriptRoot 'lib\write-video-scout-report.ps1')
-# V5 stack content-acceptance correction: the FIXED, repo-owned Gemini CLI policy that denies the
-# built-in `update_topic` tool so it can't emit agentic-orchestration chatter ahead of the requested
-# report on a headless CLI run. Passed with `--policy` on every Gemini CLI invocation below.
+# The fixed, repository-owned policy denies model tools on both Gemini CLI launch paths.
 . (Join-Path $PSScriptRoot 'lib\get-video-scout-gemini-policy.ps1')
 # V5c2a: automatic successful-run media cleanup. ONLY after a run is durably completed with a persisted
 # report does this delete that run's OWN manifest-owned media (from the validated manifest, never a
@@ -281,7 +286,7 @@ if ($VideoScout) {
                 -HasMultiSlice:$haveSlices `
                 -SliceCount $(if ($haveSlices) { $sliceSet.Count } else { 0 }) `
                 -AggregateSeconds $(if ($haveSlices) { $sliceSet.AggregateSeconds } else { 0 }) `
-                -ProbeTimeoutSec $ProbeTimeoutSec -MaxDurationSeconds $MaxDurationSeconds)
+                -ProbeTimeoutSec $ProbeTimeoutSec -MaxDurationSeconds $MaxDurationSeconds -WorkingDirectory $sdkRun.RunDir)
 
             $sdkScript = Join-Path $PSScriptRoot 'gemini-video-sdk.js'
             $sdkArgs = @('--url', $Url, '--model', $Model, '--media-resolution', $MediaResolution)
@@ -474,8 +479,11 @@ if ($VideoScout) {
 # --- locate tools (PATH may be stale right after install / inside the app) -----
 $ytdlp = Get-YtDlpPath
 
-$gemini = (Get-Command gemini -ErrorAction SilentlyContinue).Source
-if (-not $gemini) {
+# One path only: a folder holding both gemini.exe and gemini.ps1 (npm's layout) would otherwise
+# return both, and every later path operation would act on the pair.
+$gemini = Get-Command gemini -CommandType Application,ExternalScript -ErrorAction SilentlyContinue |
+    Select-Object -First 1 -ExpandProperty Source
+if (-not $gemini -and $env:APPDATA) {
     $fallback = Join-Path $env:APPDATA "npm\gemini.cmd"
     if (Test-Path $fallback) { $gemini = $fallback }
 }
@@ -503,12 +511,13 @@ $outTemplate = Join-Path $runDir "%(title)s.%(ext)s"
 # 'error', and the original exception is ALWAYS rethrown unchanged (the manifest never softens a
 # failure into a silent continue).
 try {
+    if (-not $NoFeed) { $policyPath = Get-VideoScoutGeminiPolicyPath }
     # --- Duration guard (download/CLI path) ----------------------------------------
     # Reached only for transcript / audio / non-YouTube video / -NoFeed (the SDK route returned above).
     # A range NEVER reaches here (it always routes to SDK), so HasRange:$false. This runs BEFORE the
     # download and yields the resolved per-mode limit that the subordinate --match-filter uses below.
     $guardResult = Assert-DurationGuard -Url $Url -GuardMode $Mode -HasRange:$false `
-        -ProbeTimeoutSec $ProbeTimeoutSec -MaxDurationSeconds $MaxDurationSeconds
+        -ProbeTimeoutSec $ProbeTimeoutSec -MaxDurationSeconds $MaxDurationSeconds -WorkingDirectory $runDir
 
     # --- safety caps (shared across modes) -----------------------------------------
     # A single URL should never pull a whole playlist, an oversized file, or a multi-hour VOD.
@@ -529,29 +538,27 @@ try {
         '--match-filter', "duration < $($guardResult.Limit) & !is_live"
     )
 
-    # --- per-mode yt-dlp invocation ------------------------------------------------
+    # yt-dlp receives argv under a fresh per-run working directory with no provider credentials.
     Write-Host "Downloading ($Mode): $Url" -ForegroundColor Cyan
-    # Capture yt-dlp's STDOUT (where the "does not pass filter" backstop line lands -- verified) via
-    # Tee-Object so it still streams live while we retain it to build an accurate no-file message below.
-    # stderr (progress) is left unpiped so it renders normally, not as red error records.
-    $ytStdout = @()
     switch ($Mode) {
-        # `--` terminates option parsing so a URL beginning with '-' can't be read as a flag (finding 7).
         'transcript' {
-            & $ytdlp @ytCommon --restrict-filenames --skip-download --write-auto-subs --write-subs `
-                --sub-lang $Lang --convert-subs srt -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
-            $pattern = "*.srt"
+            $modeArgs = @('--skip-download', '--write-auto-subs', '--write-subs', '--sub-lang', $Lang, '--convert-subs', 'srt')
+            $pattern = '*.srt'
         }
         'audio' {
-            & $ytdlp @ytCommon --restrict-filenames -x --audio-format mp3 -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
-            $pattern = "*.mp3"
+            $modeArgs = @('-x', '--audio-format', 'mp3')
+            $pattern = '*.mp3'
         }
         'video' {
-            & $ytdlp @ytCommon --restrict-filenames -f "bv*+ba/b" -S "res:720" `
-                --merge-output-format mp4 -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
-            $pattern = "*.mp4"
+            $modeArgs = @('-f', 'bv*+ba/b', '-S', 'res:720', '--merge-output-format', 'mp4')
+            $pattern = '*.mp4'
         }
     }
+    $downloadArgs = $ytCommon + $modeArgs + @('--restrict-filenames', '-o', $outTemplate, '--', $Url)
+    $downloadExit = 0
+    Invoke-VideoScoutDownload -Executable $ytdlp -WorkingDirectory $runDir -Arguments $downloadArgs `
+        -ExitCode ([ref]$downloadExit) | Tee-Object -Variable ytStdout
+    if ($downloadExit -ne 0) { throw "Video Scout download failed: yt-dlp exited with code $downloadExit." }
     $ytStdoutText = ($ytStdout | Out-String)
 
     # --- find what THIS run produced (scoped to $runDir -- never a prior run's leftover) -----------
@@ -643,13 +650,13 @@ try {
 
     if (-not $gemini) {
         Write-Host ""
-        Write-Host "Gemini CLI not found. File is saved above. Install/login, then run from $($file.DirectoryName):" -ForegroundColor Yellow
+        Write-Host "Gemini CLI not found. File is saved above. Install the Gemini CLI and set GEMINI_API_KEY (Mako key setup), then run from $($file.DirectoryName):" -ForegroundColor Yellow
         # V3a privacy: same rule as the -NoFeed branch — with a focus present the deferred `gemini -p`
         # command contains the user's -AnalysisFocus text, so OMIT it and print a metadata-safe
         # instruction. This branch is reachable from an app-launched run when the Gemini CLI is missing.
         # With no focus the prior deferred-command output is preserved byte-for-byte.
         if ($normalizedFocus) {
-            Write-Host "  [deferred 'gemini' command omitted: it embeds your -AnalysisFocus text, which is never printed. Install/login to the Gemini CLI, then re-run this feed-gemini command with the SAME -AnalysisFocus.]" -ForegroundColor DarkYellow
+            Write-Host "  [deferred 'gemini' command omitted: it embeds your -AnalysisFocus text, which is never printed. Install the Gemini CLI and set GEMINI_API_KEY (Mako key setup), then re-run this feed-gemini command with the SAME -AnalysisFocus.]" -ForegroundColor DarkYellow
         }
         else {
             Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
@@ -661,80 +668,70 @@ try {
         return
     }
 
-    # --- feed Gemini (run from trusted root so Gemini's folder-trust check passes) --
-    # We do NOT call the `gemini` shim (.ps1/.cmd) here, and the reason is subtle. Both shims end in
-    # `node <bundle>\gemini.js <args>`, so the runtime is a direct node call either way -- but the
-    # PowerShell 5.1 -> node.exe argument boundary does not escape a value's embedded double quotes
-    # (no PSNativeCommandArgumentPassing before PS 7.3). The -VideoScout brief contains literal "
-    # characters, so node's C runtime splits the single -p value into multiple bare tokens, and gemini
-    # aborts: "Cannot use both a positional prompt and the --prompt (-p) flag together". Routing
-    # through the shim can't be fixed from here because the shim does its OWN uncontrolled
-    # `& node ... $args` re-serialization across that same boundary. So we resolve the shim's node
-    # entry point ourselves and invoke node directly, applying CommandLineToArgvW-correct escaping
-    # (ConvertTo-NodeCliArg) to the one -p value -- see lib/get-node-cli-arg.ps1.
-    #
-    # gemini.js sits beside the shim at <shim dir>\node_modules\@google\gemini-cli\bundle\gemini.js
-    # (this is exactly the path the shim itself runs). node is located the same way the shim locates
-    # it: prefer a node.exe next to the shim, else the `node` on PATH.
-    $geminiDir = Split-Path $gemini -Parent
-    $geminiJs  = Join-Path $geminiDir 'node_modules\@google\gemini-cli\bundle\gemini.js'
-    $nodeExe   = if (Test-Path -LiteralPath (Join-Path $geminiDir 'node.exe')) { Join-Path $geminiDir 'node.exe' } else { 'node' }
-
-    Write-Host ""
-    Write-Host "Feeding to Gemini..." -ForegroundColor Cyan
-    $geminiCwd = Split-Path $OutDir -Parent
-    # V5b1 content acceptance (FAIL 2): capture the previous console output encoding BEFORE the scoped
-    # region so the finally can always restore it (covers throws AND nonzero exits). Set/restore is
-    # never a process-wide change -- see get-native-output-encoding.ps1.
-    $prevOutputEncoding = [Console]::OutputEncoding
-    Push-Location $geminiCwd
-    try {
-        # -MediaResolution is intentionally NOT passed here: the gemini CLI has no flag for it on the
-        # -p path (see lib/get-gemini-launch-config.ps1). Only -m/$Model is a real CLI knob today. Record
-        # what ACTUALLY happened -- requested-but-dropped, not silently logged as in force (finding 6).
-        Write-Host (Resolve-MediaResolutionLog -MediaResolution $MediaResolution -Route 'cli') -ForegroundColor Yellow
-        # V5b1 content acceptance (FAIL 2): scope the native-stdout DECODE to UTF-8 (no BOM) around the
-        # capture so UTF-8 provider output is not mangled through the PTY's legacy OEM code page. This
-        # covers BOTH CLI sub-paths (direct node gemini.js and the shim fallback) and the same corrected
-        # decode is what streams live to the pane. Restored in the finally below.
-        [Console]::OutputEncoding = New-NativeOutputEncoding
-        # V5b1 bounded streaming capture (both CLI sub-paths: direct node gemini.js and the shim
-        # fallback). The trailing `$line` re-emits every line so it still streams live to the pane;
-        # the collector retains at most the report limit. `$LASTEXITCODE` is set by the native exe and
-        # is NOT changed by piping through ForEach-Object, so the exit code is preserved intact.
-        $reportCollector = New-BoundedReportCollector
-        # V5 stack content-acceptance correction: deny the Gemini CLI's built-in `update_topic` tool
-        # via its supported Policy Engine on BOTH CLI sub-paths (direct-node and fallback shim), for
-        # every mode and prompt. The path is fixed + repository-owned (Get-VideoScoutGeminiPolicyPath),
-        # absolute (so it resolves under the Push-Location'd trusted CWD), and never caller-supplied.
-        # This is the enforcement; the transcript brief's output contract is defense in depth. The SDK
-        # route is unaffected (update_topic is a CLI tool; the API route has no such built-in).
-        $policyPath = Get-VideoScoutGeminiPolicyPath
-        if (Test-Path -LiteralPath $geminiJs) {
-            $pArg = ConvertTo-NodeCliArg -Arg "$Prompt @$($file.FullName)"
-            & $nodeExe $geminiJs -m $Model --policy $policyPath -p $pArg | ForEach-Object { $line = [string]$_; Add-BoundedReportLine -Collector $reportCollector -Line $line; $line }
-        }
-        else {
-            # Unknown gemini layout (no npm bundle beside the shim, e.g. a standalone .exe install).
-            # Fall back to the shim so this keeps working, but warn: a prompt with embedded quotes may
-            # be misparsed on this path, since we no longer control the final argument serialization.
-            Write-Warning "Could not locate gemini.js beside '$gemini'; falling back to the gemini shim. A prompt containing embedded double quotes may be misparsed on this fallback path."
-            & $gemini -m $Model --policy $policyPath -p "$Prompt @$($file.FullName)" | ForEach-Object { $line = [string]$_; Add-BoundedReportLine -Collector $reportCollector -Line $line; $line }
-        }
-        $feedExit = $LASTEXITCODE
+    # The isolated Gemini profile below can't reach a cached Google sign-in, and the tracked settings
+    # enforce API-key auth, so refuse here, visibly, rather than let the CLI fail on auth.
+    if (-not $env:GEMINI_API_KEY) {
+        throw 'Video Scout Gemini CLI needs GEMINI_API_KEY (set it in Mako key setup). CLI launch refused.'
     }
-    finally {
-        Pop-Location
-        [Console]::OutputEncoding = $prevOutputEncoding
+
+    # Use the npm bundle with native Node when available. The fallback must itself
+    # be a native executable because shell shims can re-parse the argument vector.
+    $geminiDir = Split-Path $gemini -Parent
+    $geminiJs = Join-Path $geminiDir 'node_modules\@google\gemini-cli\bundle\gemini.js'
+    $nodeExe = Join-Path $geminiDir 'node.exe'
+    if (-not (Test-Path -LiteralPath $nodeExe -PathType Leaf)) {
+        $nodeExe = (Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue).Source
+    }
+    $geminiArgs = @('-m', $Model, '--policy', $policyPath, '--extensions', 'none', '-p', "$Prompt @$($file.Name)")
+    if (Test-Path -LiteralPath $geminiJs -PathType Leaf) {
+        if (-not $nodeExe) { throw 'Video Scout could not find native Node for the Gemini CLI bundle. Launch refused.' }
+        $geminiExe = $nodeExe
+        $geminiArgs = @($geminiJs) + $geminiArgs
+    }
+    else {
+        $geminiExe = if ([IO.Path]::GetExtension($gemini) -eq '.exe') { $gemini }
+            else { (Get-Command gemini.exe -CommandType Application -ErrorAction SilentlyContinue).Source }
+        if (-not $geminiExe) {
+            throw 'Video Scout Gemini CLI requires an npm bundle or native Gemini executable. Launch refused.'
+        }
+        Write-Warning 'Gemini CLI bundle unavailable. Using the native Gemini executable.'
+    }
+
+    # Isolate the Gemini profile and keep its cache and temporary files in this run.
+    # The tracked settings keep hooks, usage reporting, and update checks disabled.
+    $settingsPath = Join-Path $PSScriptRoot 'config\video-scout-gemini-settings.json'
+    $settings = [IO.File]::ReadAllText($settingsPath) | ConvertFrom-Json
+    if (-not $settings) { throw 'Video Scout Gemini settings are empty. CLI launch refused.' }
+    $geminiHome = Join-Path $runDir '.gemini-home'
+    New-Item -ItemType Directory -Path $geminiHome | Out-Null
+    $geminiEnv = Get-VideoScoutProcessEnvironment $runDir
+    foreach ($key in @('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'GEMINI_CLI_HOME')) {
+        $geminiEnv[$key] = $geminiHome
+    }
+    $geminiEnv.GEMINI_CLI_SYSTEM_SETTINGS_PATH = $settingsPath
+    $geminiEnv.GEMINI_CLI_SYSTEM_DEFAULTS_PATH = $settingsPath
+    # The isolated profile has no trustedFolders.json, and headless Gemini refuses an untrusted folder.
+    # Trust only this run's own folder, which holds just this run's manifest and downloaded media.
+    $geminiEnv.GEMINI_CLI_TRUST_WORKSPACE = 'true'
+    if ($env:GEMINI_API_KEY) { $geminiEnv.GEMINI_API_KEY = $env:GEMINI_API_KEY }
+
+    Write-Host 'Feeding to Gemini...' -ForegroundColor Cyan
+    Write-Host (Resolve-MediaResolutionLog -MediaResolution $MediaResolution -Route 'cli') -ForegroundColor Yellow
+    $reportCollector = New-BoundedReportCollector
+    $feedExit = 0
+    Invoke-VideoScoutProcess -Executable $geminiExe -Arguments $geminiArgs -WorkingDirectory $runDir `
+        -Environment $geminiEnv -ExitCode ([ref]$feedExit) | ForEach-Object {
+        $line = [string]$_
+        Add-BoundedReportLine -Collector $reportCollector -Line $line
+        $line
     }
 
     # Terminal truth for the feed: the gemini CLI's own stderr already told the user WHAT failed;
     # the manifest records THAT it failed. No usage metadata exists on this route (the CLI prints
     # no machine-readable usage line), so usage stays null -- optional metadata, not a fabrication.
     if ($feedExit -ne 0) {
-        # Nonzero exit: NO report file, reportFile stays null (partial streamed output is not saved).
-        Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'error' `
-            -Reason "gemini CLI exited with code $feedExit (see the run output above)." -VideoTitle $videoTitle
+        # Keep partial output out of the report and surface the exit to the pane.
+        throw "gemini CLI exited with code $feedExit (see the run output above)."
     }
     else {
         # Clean exit only past here: finalize the bounded text, write + rename the report, and ONLY

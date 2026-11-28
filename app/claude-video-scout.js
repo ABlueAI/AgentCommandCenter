@@ -512,9 +512,19 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
       tools[name] = await locate(name, env);
       if (!tools[name]) throw new ScoutError(`${name} is missing. Put its executable on PATH and restart Mako.`);
     }
-    const video = path.join(dir, 'video.mp4');
+    const downloadDir = path.join(dir, 'download');
+    await fs.mkdir(downloadDir);
+    const downloadEnv = {
+      ...copyAllowedWindowsEnv(baseEnv, ['SystemRoot']),
+      TEMP: downloadDir, TMP: downloadDir, TMPDIR: downloadDir,
+    };
+    const deno = await locate('deno', env);
+    const invokeDownloader = (args, timeoutMs = 60000) => run(tools['yt-dlp'],
+      path.isAbsolute(deno ?? '') ? ['--js-runtimes', `deno:${deno}`, ...args] : args,
+      { cwd: downloadDir, env: downloadEnv, signal, timeoutMs, killTree });
+    const video = path.join(downloadDir, 'video.mp4');
     progress('Checking video availability…');
-    const metadata = await invoke(tools['yt-dlp'], metadataArgs(url));
+    const metadata = await invokeDownloader(metadataArgs(url));
     processRefusal(metadata, 'Video lookup with yt-dlp');
     const source = readJson(metadata.stdout);
     if (metadata.code !== 0 || !source) throw ytDlpRefusal(metadata, 'Video could not be read: yt-dlp could not load the source.');
@@ -525,8 +535,8 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
     validateDuration(source.duration, maxSeconds);
 
     progress('Downloading video…');
-    const downloaded = await invoke(tools['yt-dlp'], downloadArgs(url, tools.ffmpeg, video, maxSeconds),
-      { timeoutMs: Math.max(30 * 60000, source.duration * 1000) });
+    const downloaded = await invokeDownloader(downloadArgs(url, tools.ffmpeg, video, maxSeconds),
+      Math.max(30 * 60000, source.duration * 1000));
     processRefusal(downloaded, 'Video download with yt-dlp');
     if (downloaded.code !== 0) throw ytDlpRefusal(downloaded, 'Video could not be read: yt-dlp could not download an MP4.');
     const videoStat = await fs.stat(video).catch((err) => {
