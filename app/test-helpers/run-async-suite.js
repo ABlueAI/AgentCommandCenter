@@ -4,12 +4,12 @@ const { writeSync } = require('node:fs');
 
 const SUITE_TIMEOUT_MS = 5000;
 
-async function runAsyncSuite(name, run) {
+async function runAsyncSuite(name, run, timeoutMs = SUITE_TIMEOUT_MS) {
   // Keep Node alive even when the suite awaits a promise with no active handles.
   const deadline = setTimeout(() => {
-    writeSync(2, `${name}: timed out after ${SUITE_TIMEOUT_MS} ms before all assertions finished\n`);
+    writeSync(2, `${name}: timed out after ${timeoutMs} ms before all assertions finished\n`);
     process.exit(1);
-  }, SUITE_TIMEOUT_MS);
+  }, timeoutMs);
 
   try {
     const { passed, failed } = await run();
@@ -23,4 +23,4 @@ async function runAsyncSuite(name, run) {
   }
 }
 
-module.exports = { runAsyncSuite };
+module.exports = { runAsyncSuite, SUITE_TIMEOUT_MS };
