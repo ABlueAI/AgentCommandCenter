@@ -7,6 +7,7 @@
 // tests the real boundary logic without touching disk.
 
 const { createLibraryIpc } = require('./library-ipc');
+const { runAsyncSuite } = require('./test-helpers/run-async-suite');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -73,7 +74,7 @@ function trustedIpc(overrides) {
   return { ipc, calls, ev: evt(w) };
 }
 
-(async () => {
+runAsyncSuite('library-ipc', async () => {
   // --- sender gate on every handler ---
   {
     const { ipc } = trustedIpc();
@@ -209,5 +210,5 @@ function trustedIpc(overrides) {
   }
 
   process.stdout.write(`\nlibrary-ipc: ${passed} passed, ${failed} failed\n`);
-  process.exit(failed ? 1 : 0);
-})();
+  return { passed, failed };
+});

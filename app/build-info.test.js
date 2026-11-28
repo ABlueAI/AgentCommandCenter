@@ -4,6 +4,7 @@
 // The visible build label names the real version and commit, and never guesses when git is missing.
 
 const { readBuildInfo, formatBuildLabel } = require('./build-info');
+const { runAsyncSuite } = require('./test-helpers/run-async-suite');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -20,7 +21,7 @@ const fakeGit = (answers) => async (args) => {
   return v;
 };
 
-(async () => {
+runAsyncSuite('build-info', async () => {
   {
     const info = await readBuildInfo({
       version: '1.0.0',
@@ -87,5 +88,5 @@ const fakeGit = (answers) => async (args) => {
   eq(pkg.version, '1.0.0', 'package.json carries the 1.0.0 release version');
 
   process.stdout.write(`\nbuild-info: ${passed} passed, ${failed} failed\n`);
-  process.exit(failed ? 1 : 0);
-})();
+  return { passed, failed };
+});
