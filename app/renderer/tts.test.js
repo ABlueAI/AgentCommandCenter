@@ -16,6 +16,8 @@
 // queues drain) and spies on URL.createObjectURL/revokeObjectURL around Node's real
 // implementations, so the real Blob → object URL → element pipeline runs for real.
 
+import { readFileSync } from 'node:fs';
+
 let passed = 0;
 let failed = 0;
 
@@ -31,6 +33,20 @@ function assert(condition, label) {
 
 function section(name) { process.stdout.write(`\n${name}\n`); }
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+section('Renderer vendor layout documentation');
+const ttsSource = readFileSync(new URL('./tts.js', import.meta.url), 'utf8');
+const ttsIntro = ttsSource.split('// This is an ES module', 1)[0];
+assert(ttsIntro.includes('vendor/kokoro.web.js') && /WASM binaries.+jsDelivr/s.test(ttsIntro)
+  && !ttsIntro.includes('vendor/ort/'),
+  'the TTS intro identifies the tracked bundle and the remote ONNX Runtime WASM');
+
+const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+const architecture = /^## Architecture\r?\n([\s\S]+?)(?=^## )/m.exec(readme)?.[1] ?? '';
+const documentedVendorItems = ['xterm.js', 'xterm.css', 'fit', 'Unicode 11', 'web links', 'WebGL',
+  'kokoro.web.js', 'Inter', 'Cascadia Code', 'fonts/'];
+assert(documentedVendorItems.every((item) => architecture.includes(item)),
+  'the app README describes the vendored terminal, speech bundle, and fonts');
 
 // --- minimal window stub -------------------------------------------------------
 // tts.js needs EventTarget (addEventListener/dispatchEvent) at import time and

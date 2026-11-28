@@ -31,7 +31,8 @@ npm start
   behind IPC handlers (`pty-start/write/resize/kill`, `pty-data/exit`).
 - `preload.js` — exposes a tidy `window.cc` API; renderer has **no** Node access (contextIsolation on).
 - `renderer/` — `index.html` + `styles.css` (theme variable sets) + `app.js` (pure UI + xterm)
-  + `vendor/` (vendored xterm.js / addon-fit / xterm.css).
+  + `vendor/` (xterm.js, xterm.css, and the fit, Unicode 11, web links, and WebGL add-ons,
+  plus the `kokoro.web.js` speech bundle and the Inter and Cascadia Code fonts under `fonts/`).
 
 ## Terminal stack notes
 - Uses **`@lydell/node-pty`** (prebuilt N-API ConPTY) — no native compile, loads in Electron.
