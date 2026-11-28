@@ -29,6 +29,14 @@ required, status setup turned off) leaves the toast in place, so it is still the
 back; it becoming fresh again does not replay it. Clicking a current toast restores/focuses Mako; inspect the pane
 status badges to find the pane. Toasts contain only fixed text, never paths, task names or output.
 
+**Quiet hours (S19).** While quiet hours are on (the top bar's switch, saved as `uiQuietSince`),
+a toast that would show is held and the badge still shows the state. When quiet hours end, each
+held toast is shown if its pane is still in the state it was held for; a pane that moved on drops
+its held toast. If Mako can't read the quiet state, the toast shows and Logs says why. The control
+room's "Needs you" strip and the F8 jump key (S19) show the same waiting panes inside Mako.
+Toasts are silent (sound off, S19). While any pane needs you, Mako's taskbar button carries a red
+dot whose description gives the count; quiet hours never hold the dot.
+
 Windows must allow notifications for Mako (or Electron when running from the source checkout).
 Do not disturb can suppress banners. Mako already sets the Windows AppUserModelID
 `ABlueAI.Mako` before opening a window; use the existing Mako shortcut. The pinned Electron

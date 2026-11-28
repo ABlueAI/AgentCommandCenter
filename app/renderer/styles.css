@@ -523,6 +523,46 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-tab, .mk-btn, .mk-emblem { transition-property: background-color, color, border-color; }
 @media (prefers-reduced-motion: reduce) { .mk-tab, .mk-btn, .mk-emblem { transition: none; } }
 
+/* S19: the control room's "Needs you" strip, above the panes. One chip per waiting pane. */
+.mk-needs[hidden] { display: none !important; }
+.mk-needs { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--mk-line, var(--border)); background: var(--mk-surface-raised, var(--panel)); font: 500 12.5px/18px var(--mk-sans, inherit); }
+.mk-needs-title { font-weight: 600; color: var(--mk-status-needs, #ff6b6b); }
+.mk-needs-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; }
+.mk-needs-chip:focus-visible { outline: 2px solid var(--mk-focus, var(--accent-2)); outline-offset: 2px; }
+.mk-needs-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mk-status-needs, #ff6b6b); }
+.mk-needs-label { max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-needs-time { font: 600 12px/18px var(--mk-mono, monospace); font-variant-numeric: tabular-nums; color: var(--mk-ink-muted, var(--muted)); }
+.mk-needs-hint { margin-left: auto; }
+
+/* S19: the stall watch in the pane header. Red for stalled, the composer amber for a usage wait. */
+.stall-tag { margin-left: 8px; padding: 0 6px; border-radius: 4px; font: 600 11.5px/16px var(--mk-sans, inherit); white-space: nowrap; }
+.stall-stalled { color: var(--mk-status-needs, #ff6b6b); border: 1px solid currentColor; }
+.stall-usage-wait { color: var(--mk-composer-ink, #f0c060); border: 1px solid currentColor; }
+
+/* S19: the pane header's branch and authority tags. */
+.pane-tag { padding: 0 6px; border-radius: 4px; border: 1px solid var(--mk-line, var(--border)); color: var(--mk-ink-muted, var(--muted)); font: 500 11px/16px var(--mk-mono, monospace); white-space: nowrap; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
+.auth-high { color: var(--mk-composer-ink, #f0c060); }
+.auth-unknown { color: var(--mk-status-needs, #ff6b6b); }
+
+/* S19: the panes and the right panel. The panel shows only in the three-tab layout's control room,
+   on a window at least 1280 px wide. */
+.term-split { flex: 1; min-height: 0; display: flex; }
+.term-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.mk-focus-panel { flex: 0 0 272px; min-height: 0; overflow: auto; padding: 12px; border-left: 1px solid var(--mk-line, var(--border)); background: var(--mk-surface-raised, var(--panel)); }
+:root:not([data-mako-layout="tabs"]) .mk-focus-panel { display: none; }
+/* On a window narrower than 1280 px the panes need the room more than the panel does. */
+@media (max-width: 1279px) { .mk-focus-panel { display: none; } }
+.mk-focus-empty { margin: 4px 0; }
+
+/* S19: the cheat sheet. */
+.cheat-sheet-host { display: inline-flex; }
+.mk-cheat-open { min-width: 28px; padding: 2px 8px; font-weight: 600; }
+.mk-cheat { max-width: min(720px, 92vw); max-height: 80vh; overflow: auto; padding: 16px 20px; border: 1px solid var(--mk-line, var(--border)); border-radius: 8px; background: var(--mk-surface-raised, var(--panel)); color: var(--mk-ink, var(--text)); }
+.mk-cheat::backdrop { background: rgba(0, 0, 0, 0.55); }
+.mk-cheat-title { margin: 0 0 12px; font: 600 16px/22px var(--mk-sans, inherit); }
+.mk-cheat-phrases { margin: 12px 0; }
+.mk-cheat-open:focus-visible, .mk-cheat .mk-btn:focus-visible { outline: 2px solid var(--mk-focus, var(--accent-2)); outline-offset: 2px; }
+
 /* The embedded production surface: a sibling of `.term-grid` in the same tab, taking the same
    remaining space the grid would. Exactly one of the two is visible at a time.
    `[hidden]` needs an explicit rule because an author `display` value beats the UA stylesheet's

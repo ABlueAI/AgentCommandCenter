@@ -14,14 +14,27 @@ const MESSAGES = Object.freeze({
   }),
 });
 
-function createPaneStatusNotifications({ Notification, platform, getWindow, log }) {
+// S19: quiet hours hold the toast and keep the badge (docs/DESIGN-BRIEF-1.1.md 5.2). `isQuiet` reads
+// the one quiet state (S66's switch, saved as uiQuietSince). While quiet, a toast that would show is
+// held, one per pane; `releaseHeld()` (called when quiet hours end) shows each one whose pane is
+// still in that state. If the quiet state can't be read, the toast shows: an alert Blue didn't
+// want is better than one he never gets.
+function createPaneStatusNotifications({ Notification, platform, getWindow, log, isQuiet }) {
   const states = new Map();
   const active = new Map(); // Retain Electron objects for click/failure events; one per live pane.
+  const held = new Map();   // paneId -> state whose toast is waiting for quiet hours to end
   const report = typeof log === 'function' ? log : () => {};
   let disposed = false;
   let unsupportedReported = false;
 
+  function quietNow() {
+    if (typeof isQuiet !== 'function') return false;
+    try { return isQuiet() === true; }
+    catch { report('[pane-notifications] quiet hours could not be read (quiet-read-failed); showing the toast'); return false; }
+  }
+
   function dismiss(paneId) {
+    held.delete(paneId);
     const notification = active.get(paneId);
     active.delete(paneId);
     if (notification) {
@@ -53,14 +66,23 @@ function createPaneStatusNotifications({ Notification, platform, getWindow, log 
     states.set(paneId, state);
     dismiss(paneId);
     if (!Object.hasOwn(MESSAGES, state)) return;
+    if (quietNow()) {
+      held.set(paneId, state);
+      report('[pane-notifications] toast held (quiet hours); the badge still shows it');
+      return;
+    }
+    show(paneId, state);
+  }
 
+  function show(paneId, state) {
     try {
       if (!Notification || !Notification.isSupported()) {
         if (!unsupportedReported) report('[pane-notifications] desktop notifications unavailable');
         unsupportedReported = true;
         return;
       }
-      const notification = new Notification({ ...MESSAGES[state] });
+      // S19: sound off (docs/DESIGN-BRIEF-1.1.md 5.2): the toast is silent; the badge and strip show it.
+      const notification = new Notification({ ...MESSAGES[state], silent: true });
       active.set(paneId, notification);
       const forget = () => { if (active.get(paneId) === notification) active.delete(paneId); };
       notification.on('failed', () => {
@@ -87,13 +109,24 @@ function createPaneStatusNotifications({ Notification, platform, getWindow, log 
     }
   }
 
+  // Quiet hours ended: show each held toast whose pane is still in the state it was held for.
+  function releaseHeld() {
+    if (disposed || platform !== 'win32') { held.clear(); return 0; }
+    const due = [...held.entries()].filter(([paneId, state]) => states.get(paneId) === state);
+    held.clear();
+    for (const [paneId, state] of due) show(paneId, state);
+    if (due.length) report(`[pane-notifications] quiet hours ended; ${due.length} held toast(s) shown`);
+    return due.length;
+  }
+
   function dispose() {
     disposed = true;
+    held.clear();
     for (const paneId of active.keys()) dismiss(paneId);
     states.clear();
   }
 
-  return { observe, dispose };
+  return { observe, releaseHeld, dispose };
 }
 
 module.exports = { createPaneStatusNotifications };

@@ -17,8 +17,8 @@ const INDEX_FILE = path.join(__dirname, 'renderer', 'index.html');
 const PRELOAD_FILE = path.join(__dirname, 'preload.js');
 const STEP_TIMEOUT_MS = 30000;
 
-const ipc = { saves: [], ptyStart: 0 };
-const control = { settings: {}, gate: null, release: () => {}, repos: [], saveFail: false, worktrees: [] };
+const ipc = { saves: [], ptyStart: 0, ptyIds: [], writes: [], kills: [], dismissed: [] };
+const control = { settings: {}, gate: null, release: () => {}, repos: [], saveFail: false, worktrees: [], ptyOk: false, resumeRows: null };
 const remote = [];
 const consoleErrors = [];
 let win = null;
@@ -50,7 +50,7 @@ async function open(name, settings, beforeBoot, repos) {
   control.repos = repos || [];
   control.worktrees = control.repos.length ? [{ path: 'D:\\Workspace\\AgentCommandCenter-search-bar', branch: 'agent/search-bar' }] : [];
   control.gate = new Promise((r) => { control.release = r; });
-  ipc.saves = []; ipc.ptyStart = 0;
+  ipc.saves = []; ipc.ptyStart = 0; ipc.ptyIds = []; ipc.writes = []; ipc.kills = []; ipc.dismissed = [];
   await withTimeout(win.loadFile(INDEX_FILE), STEP_TIMEOUT_MS, `${name}: loadFile`);
   await run(PRELUDE);
   if (beforeBoot) await run(beforeBoot);
@@ -344,6 +344,8 @@ async function scenarioTopBar() {
       out.pausedOnTab[tab] = t.shown('#makoPausedBanner');
     }
     out.quietDisabled = document.getElementById('makoQuiet').disabled;
+    // S19 turns Pause all on late in boot, after the shell starts: wait for it (or time out).
+    await t.waitFor(() => document.getElementById('makoPauseAll').disabled === false, 5000);
     out.pauseDisabled = document.getElementById('makoPauseAll').disabled;
     // Quiet hours on (as S18 and S19 will do), on every tab.
     shell.setQuiet(true);
@@ -378,6 +380,186 @@ async function scenarioTopBar() {
   r.saves = ipc.saves.slice();
   await park();
   return r;
+}
+
+async function scenarioNeedsYou() {
+  // S19: the "Needs you" strip. Main sends token-free pane-status views; the strip shows one chip
+  // per waiting pane, oldest first, F8 is consumed and jumps, and a pane that can't be focused (none
+  // runs in this harness) is logged, never silent.
+  await open('needsYou', { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiTab: 'control' });
+  await run(`window.__t.waitFor(() => document.documentElement.getAttribute('data-mako-layout') === 'tabs')`);
+  // Wait until boot has bound the Terminals tab, then open it.
+  await run(`(async () => { const b = document.querySelector('.tab[data-tab="terminals"]'); await window.__t.waitFor(() => typeof b.onclick === 'function'); b.click(); })()`);
+  const out = {};
+  out.hiddenAtStart = await run(`window.__t.shown('#needsYouStrip') === false`);
+  // The renderer may still be wiring its listeners: resend the first view until it lands (a repeat
+  // changes nothing, which the unit test checks).
+  let landed = false;
+  for (let i = 0; i < 40 && !landed; i += 1) {
+    win.webContents.send('pane-status-view', { paneId: 'pty1', state: 'attention', reason: null });
+    landed = await run(`window.__t.waitFor(() => window.__t.log().includes('pty1 -> needs you'), 250)`);
+  }
+  out.firstLanded = landed;
+  await run(`window.__t.sleep(30)`);
+  win.webContents.send('pane-status-view', { paneId: 'pty2', state: 'attention', reason: null });
+  win.webContents.send('pane-status-view', { paneId: 'pty3', state: 'working', reason: null });
+  await run(`window.__t.waitFor(() => document.querySelectorAll('#needsYouStrip .mk-needs-chip').length === 2)`);
+  // A waiting pane's status ages to unknown/stale after 2 minutes with no new hook event: still waiting.
+  win.webContents.send('pane-status-view', { paneId: 'pty1', state: 'unknown', reason: 'stale' });
+  await run(`window.__t.waitFor(() => window.__t.log().includes('pty1 -> unknown'), 3000)`);
+  out.chipsAfterStale = await run(`document.querySelectorAll('#needsYouStrip .mk-needs-chip').length`);
+  Object.assign(out, await run(`(async () => {
+    const t = window.__t;
+    const strip = document.getElementById('needsYouStrip');
+    return {
+      shown: t.shown('#needsYouStrip'),
+      chips: Array.from(strip.querySelectorAll('.mk-needs-chip')).map((b) => b.getAttribute('data-pane-id')),
+      title: strip.querySelector('.mk-needs-title').textContent,
+      region: strip.getAttribute('role') + '|' + strip.getAttribute('aria-label'),
+      f8Consumed: t.key('F8'),
+      ctrlF8Consumed: t.key('F8', { ctrlKey: true }),
+    };
+  })()`));
+  await run(`window.__t.sleep(30)`);
+  out.f8Logged = await run(`window.__t.log().includes('[needs-you] could not focus pty1 (focus-failed)')`);
+  if (process.env.MAKO_SCREENSHOT_DIR) {
+    try {
+      const img = await win.webContents.capturePage();
+      require('fs').writeFileSync(path.join(process.env.MAKO_SCREENSHOT_DIR, 's19-needs-you.png'), img.toPNG());
+      out.screenshot = true;
+    } catch (e) { out.screenshot = String((e && e.message) || e).slice(0, 200); }
+  }
+  win.webContents.send('pane-status-view', { paneId: 'pty1', state: 'working', reason: null });
+  await run(`window.__t.waitFor(() => document.querySelectorAll('#needsYouStrip .mk-needs-chip').length === 1)`);
+  out.afterWorking = await run(`Array.from(document.querySelectorAll('#needsYouStrip .mk-needs-chip')).map((b) => b.getAttribute('data-pane-id'))`);
+  win.webContents.send('pane-status-view', { paneId: 'pty2', state: 'exited', reason: null });
+  await run(`window.__t.waitFor(() => document.getElementById('needsYouStrip').hidden === true)`);
+  out.hiddenAtEnd = await run(`window.__t.shown('#needsYouStrip') === false`);
+  // S19: the cheat sheet opens from its "?" button, lists S66's shortcut list, and Esc closes it.
+  Object.assign(out, await run(`(async () => {
+    const t = window.__t;
+    const btn = document.getElementById('makoCheatSheetOpen');
+    if (!btn) return { cheatButton: false };
+    btn.focus();
+    btn.click();
+    await t.sleep(30);
+    const dlg = document.getElementById('makoCheatSheet');
+    const r = { cheatButton: true, cheatOpen: dlg.open, cheatRows: dlg.querySelectorAll('tbody tr').length, cheatHasF8: dlg.textContent.includes('F8'), cheatFocus: document.activeElement && document.activeElement.id };
+    dlg.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    dlg.close();
+    await t.sleep(30);
+    r.cheatClosed = !dlg.open;
+    r.cheatFocusBack = document.activeElement === btn;
+    return r;
+  })()`));
+  out.ptyStart = ipc.ptyStart;
+  await park();
+  return out;
+}
+
+async function scenarioPauseAll() {
+  // S19: what Pause all does to panes, counted at the IPC boundary. Two panes start (main answers
+  // ok); one is working, one needs Blue. Pause all sends one Esc to the working pane only, kills
+  // nothing, and refuses a new pane; Resume all sends nothing.
+  control.ptyOk = true;
+  await open('pauseAll', { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiTab: 'control' });
+  const out = {};
+  try {
+    await run(`window.__t.waitFor(() => document.documentElement.getAttribute('data-mako-layout') === 'tabs')`);
+    await run(`(async () => { const b = document.querySelector('.tab[data-tab="terminals"]'); await window.__t.waitFor(() => typeof b.onclick === 'function'); b.click(); })()`);
+    out.pauseEnabled = await run(`window.__t.waitFor(() => document.getElementById('makoPauseAll').disabled === false)`);
+    await run(`(async () => { const b = document.getElementById('newTermShell'); await window.__t.waitFor(() => typeof b.onclick === 'function'); b.click(); await window.__t.sleep(200); b.click(); })()`);
+    const end = Date.now() + 10000;
+    while (ipc.ptyIds.length < 2 && Date.now() < end) await new Promise((r) => setTimeout(r, 50));
+    out.started = ipc.ptyIds.length;
+    out.headerTags = await run(`Array.from(terms.get(${JSON.stringify('pty1')}) ? terms.get('pty1').pane.querySelectorAll('.term-head .pane-tag') : []).map((n) => n.textContent)`);
+    const [working, waiting] = ipc.ptyIds;
+    // Resend until the renderer has the views (it may still be wiring listeners).
+    for (let i = 0; i < 40; i += 1) {
+      win.webContents.send('pane-status-view', { paneId: working, state: 'working', reason: null });
+      win.webContents.send('pane-status-view', { paneId: waiting, state: 'attention', reason: null });
+      if (await run(`window.__t.waitFor(() => window.__t.log().includes(${JSON.stringify(waiting + ' -> needs you')}), 250)`)) break;
+    }
+    ipc.writes = [];
+    await run(`document.getElementById('makoPauseAll').click()`);
+    await run(`window.__t.sleep(100)`);
+    out.escWrites = ipc.writes.filter((w) => w[1] === '\u001b');
+    out.otherWrites = ipc.writes.filter((w) => w[1] !== '\u001b').length;
+    out.working = working;
+    out.kills = ipc.kills.slice();
+    out.banner = await run(`window.__t.shown('#makoPausedBanner')`);
+    out.logged = await run(`window.__t.log().includes('Esc requested for 1 working pane(s)') && window.__t.log().includes('nothing killed')`);
+    const before = ipc.ptyStart;
+    await run(`(async () => { document.getElementById('newTermShell').click(); await window.__t.sleep(200); })()`);
+    out.startedWhilePaused = ipc.ptyStart - before;
+    out.refusalLogged = await run(`window.__t.log().includes('refused to start a shell: Pause all is on')`);
+    ipc.writes = [];
+    await run(`document.getElementById('makoResumeAll').click()`);
+    await run(`window.__t.sleep(100)`);
+    out.writesOnResume = ipc.writes.length;
+    out.bannerAfterResume = await run(`window.__t.shown('#makoPausedBanner')`);
+    // S19: the stall watch paints the real pane header: five failed turns in a row read "stalled".
+    for (let i = 0; i < 5; i += 1) {
+      win.webContents.send('pane-status-view', { paneId: working, state: 'failed', reason: null });
+      win.webContents.send('pane-status-view', { paneId: working, state: 'working', reason: null });
+    }
+    await run(`window.__t.waitFor(() => window.__t.log().split(${JSON.stringify(working + ' -> failed')}).length >= 6, 5000)`);
+    // Read through the pane's own header (the element the app holds for it, as the badge does).
+    out.stallTag = await run(`(() => { stallWatch.tick(); const h = terms.get(${JSON.stringify(working)}).pane.querySelector('.term-head'); return Array.from(h.querySelectorAll('.stall-tag')).map((n) => n.textContent + '|' + n.getAttribute('role')); })()`);
+    // S19: the right panel. Selecting the working pane (a mousedown on it, as a click does) shows
+    // its In-focus card; Interrupt sends exactly one Esc to that pane, counted at the boundary.
+    await run(`terms.get(${JSON.stringify(working)}).pane.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
+    out.panel = await run(`(() => { const p = document.getElementById('controlFocus'); const c = p.querySelector('[data-state]'); return { state: c ? c.getAttribute('data-state') : null, shown: window.__t.shown('#controlFocus'), wide: window.innerWidth >= 1280, hasInterrupt: !!p.querySelector('[data-action="interrupt"]') }; })()`);
+    ipc.writes = [];
+    await run(`(() => { const b = document.querySelector('#controlFocus [data-action="interrupt"]'); if (b) b.click(); })()`);
+    await run(`window.__t.sleep(100)`);
+    out.interruptWrites = ipc.writes.slice();
+    out.interruptKills = ipc.kills.slice();
+    if (process.env.MAKO_SCREENSHOT_DIR) {
+      try {
+        const img = await win.webContents.capturePage();
+        require('fs').writeFileSync(path.join(process.env.MAKO_SCREENSHOT_DIR, 's19-control-room.png'), img.toPNG());
+      } catch { /* a screenshot is for people, never a gate */ }
+    }
+  } finally {
+    control.ptyOk = false;
+  }
+  await park();
+  return out;
+}
+
+async function scenarioPausedResume() {
+  // S19: a pause restored at startup meets the Resume offer. Resume and Start fresh start nothing,
+  // dismiss nothing, and the row stays on offer for after Resume all.
+  control.ptyOk = true;
+  control.resumeRows = [{ sessionId: 'sess-1', role: 'builder', worktree: 'D:\\Workspace\\AgentCommandCenter-search-bar', startedAt: '2026-11-25T10:00:00.000Z', stoppedAt: '2026-11-25T18:00:00.000Z', stopReason: 'closed', worktreeMissing: false, mayBeExpired: false }];
+  const out = {};
+  try {
+    await open('pausedResume', { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiTab: 'control', uiPausedSince: '2026-11-25T19:05:00.000Z' });
+    await run(`window.__t.waitFor(() => document.querySelectorAll('.resume-row').length === 1 && document.getElementById('makoPauseAll').disabled === false)`);
+    Object.assign(out, await run(`(async () => {
+      const t = window.__t;
+      const buttons = () => Array.from(document.querySelectorAll('.resume-row button'));
+      const byText = (txt) => buttons().find((b) => b.textContent === txt);
+      byText('Resume').click();
+      await t.sleep(50);
+      byText('Start fresh').click();
+      await t.sleep(100);
+      return {
+        rowsLeft: document.querySelectorAll('.resume-row').length,
+        refusedResume: t.log().includes('refused to start a resumed pane: Pause all is on'),
+        refusedFresh: t.log().includes('refused to start a fresh pane: Pause all is on'),
+        restoredLogged: t.log().includes('paused state restored at startup; nothing sent'),
+      };
+    })()`));
+    out.ptyStart = ipc.ptyStart;
+    out.dismissed = ipc.dismissed.slice();
+  } finally {
+    control.ptyOk = false;
+    control.resumeRows = null;
+  }
+  await park();
+  return out;
 }
 
 async function refusalCase(name, beforeBoot) {
@@ -462,9 +644,12 @@ app.whenReady().then(async () => {
   ipcMain.handle('get-gemini-key-status', () => ({ ok: true, hasKey: true, available: true }));
   ipcMain.handle('get-agent-token-status', () => ({ ok: true, hasToken: true }));
   ipcMain.handle('tlog-reset', () => ({ ok: true }));
-  ipcMain.handle('pty-start', () => { ipc.ptyStart += 1; return { ok: false, error: 'harness' }; });
-  ipcMain.on('pty-kill', () => {});
-  ipcMain.on('pty-write', () => {});
+  ipcMain.handle('pty-start', (_e, o) => { ipc.ptyStart += 1; ipc.ptyIds.push(o && o.id); return control.ptyOk ? { ok: true } : { ok: false, error: 'harness' }; });
+  ipcMain.on('pty-kill', (_e, id) => { ipc.kills.push(id); });
+  // S19: a Resume offer only for the scenario that sets one; otherwise the invoke is unhandled, as before.
+  ipcMain.handle('session-resume-offer', () => (control.resumeRows ? { ok: true, rows: control.resumeRows.slice(), retentionDays: 14 } : Promise.reject(new Error('harness: no offer'))));
+  ipcMain.handle('session-resume-dismiss', (_e, id) => { ipc.dismissed.push(id); return { ok: true }; });
+  ipcMain.on('pty-write', (_e, m) => { ipc.writes.push([m && m.id, m && m.data]); });
   ipcMain.on('pty-resize', () => {});
   ipcMain.handle('library-list', () => ({ ok: true, entries: [], total: 0, invalidCount: 0, invalid: [], capExceeded: false }));
   ipcMain.handle('clipboard-read', () => ({ ok: true, text: '' }));
@@ -486,7 +671,7 @@ app.whenReady().then(async () => {
     process.stdout.write(JSON.stringify({ ok: false, fatal: { scenario: 'watchdog', error: 'over budget' }, scenarios }) + '\n');
     app.exit(1);
   }, 4 * 60 * 1000);
-  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['refusal', scenarioRefusal], ['saveFails', scenarioSaveFails]]) {
+  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['needsYou', scenarioNeedsYou], ['pauseAll', scenarioPauseAll], ['pausedResume', scenarioPausedResume], ['refusal', scenarioRefusal], ['saveFails', scenarioSaveFails]]) {
     try { scenarios[name] = await fn(); progress(`${name}: done`); }
     catch (e) { fatal = { scenario: name, error: String((e && e.message) || e) }; progress(`${name}: FAILED ${fatal.error}`); break; }
   }

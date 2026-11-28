@@ -29,6 +29,7 @@ function rig(options = {}) {
   const notifier = createPaneStatusNotifications({
     Notification, platform: options.platform || 'win32',
     getWindow: () => options.noWindow ? null : win, log: line => logs.push(line),
+    isQuiet: options.isQuiet,
   });
   const view = (state, paneId = 'pty1', reason = null) => notifier.observe({paneId, state, reason});
   return { notifier, shown, logs, actions, view };
@@ -114,7 +115,9 @@ test('dismissal errors are visible; Linux/macOS do not invoke a native notificat
 });
 test('notification payloads contain no pane names, paths, tokens or arbitrary view fields', () => {
   const r=rig(); r.notifier.observe({paneId:'PRIVATE',state:'attention',reason:null,token:'PRIVATE',transcript:'PRIVATE'});
-  assert.deepEqual(Object.keys(r.shown[0].message).sort(),['body','title']);
+  // S19: `silent` is a fixed boolean (sound off), not view data.
+  assert.deepEqual(Object.keys(r.shown[0].message).sort(),['body','silent','title']);
+  assert.equal(r.shown[0].message.silent, true);
   assert(!JSON.stringify(r.shown[0].message).includes('PRIVATE'));
 });
 test('real pane registry and transport validation gate alerts; malformed/foreign/refresh-only events cannot alert', () => {
@@ -139,8 +142,38 @@ test('real pane registry and transport validation gate alerts; malformed/foreign
 });
 test('main composes the observer with the existing controller publisher and preserves delivery result', () => {
   const main=fs.readFileSync(path.join(__dirname,'..','main.js'),'utf8');
-  assert.match(main,/publishView: \(view\) => \{\s*const delivered = paneStatusPublishers\.publishView\(view\);\s*paneStatusNotifications\.observe\(view\);\s*return delivered;/);
+  assert.match(main,/publishView: \(view\) => \{\s*const delivered = paneStatusPublishers\.publishView\(view\);\s*paneStatusNotifications\.observe\(view\);\s*needsYouTaskbar\.observe\(view\);\s*return delivered;/);
   assert.match(main,/app\.on\('will-quit', \(\) => \{\s*paneStatusNotifications\.dispose\(\);/);
   assert.match(main,/app\.on\('window-all-closed', \(\) => \{\s*paneStatusNotifications\.dispose\(\);/);
+});
+test('S19: quiet hours hold the toast, and its end shows the ones still current', () => {
+  let quiet = true;
+  const r = rig({ isQuiet: () => quiet });
+  r.view('attention', 'pty1'); r.view('turn ended', 'pty2'); r.view('attention', 'pty3');
+  assert.equal(r.shown.length, 0);
+  assert.ok(r.logs.some((l) => /held \(quiet hours\); the badge still shows it/.test(l)));
+  r.view('working', 'pty3'); // no longer waiting: its held toast is dropped
+  r.view('attention', 'pty1'); // a repeat changes nothing
+  quiet = false;
+  assert.equal(r.notifier.releaseHeld(), 2);
+  assert.deepEqual(r.shown.map((n) => n.message.title), ['Mako — Claude needs attention', 'Mako — Claude turn ended']);
+  assert.ok(r.logs.some((l) => /2 held toast\(s\) shown/.test(l)));
+  assert.equal(r.notifier.releaseHeld(), 0, 'nothing is shown twice');
+  r.view('working', 'pty1'); r.view('attention', 'pty1');
+  assert.equal(r.shown.length, 3, 'out of quiet hours, toasts show at once');
+});
+test('S19: an exited pane drops its held toast; dispose clears them', () => {
+  const r = rig({ isQuiet: () => true });
+  r.view('attention', 'pty1'); r.view('exited', 'pty1'); r.view('attention', 'pty2');
+  r.notifier.dispose();
+  assert.equal(r.notifier.releaseHeld(), 0);
+  assert.equal(r.shown.length, 0);
+});
+test('S19: a quiet state that cannot be read shows the toast and says why', () => {
+  const r = rig({ isQuiet: () => { throw Error('PRIVATE'); } });
+  r.view('attention');
+  assert.equal(r.shown.length, 1);
+  assert.ok(r.logs.some((l) => /quiet-read-failed/.test(l)));
+  assert.ok(!r.logs.some((l) => /PRIVATE/.test(l)), 'no exception text is logged');
 });
 console.log(`\npane-status-notifications: ${passed} passed, ${failed} failed`);

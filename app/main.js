@@ -3,7 +3,7 @@
 // (git worktrees, VSCode, Windows Terminal, the browser). The renderer
 // never touches Node directly — everything goes through the IPC handlers below.
 
-const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage, clipboard, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage, clipboard, Notification, nativeImage } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
@@ -68,6 +68,8 @@ const { createPtyStartAuthority } = require('./pty-start-authority');
 const { createPaneStatusController } = require('./pane-status/pane-status-controller');
 const { registerPaneStatusIpc, createPublishers } = require('./pane-status/pane-status-ipc');
 const { createPaneStatusNotifications } = require('./pane-status/pane-status-notifications');
+const { createNeedsYouTaskbar } = require('./needs-you-taskbar');
+const { isQuietSince } = require('./quiet-hours');
 const paneStatusDoc = require('./pane-status/pane-status-settings-doc');
 const paneStatusShim = require('./pane-status/pane-status-runtime-shim');
 // The pane-equivalent version resolver (dependency A) and the bounded absolute PowerShell used by the
@@ -486,6 +488,13 @@ let win = null;
 const paneStatusNotifications = createPaneStatusNotifications({
   Notification, platform: process.platform, getWindow: () => win,
   log: (line) => tlog(line),
+  // S19: quiet hours (S66's switch, saved as uiQuietSince) hold the toast; the badge still shows.
+  // The same reading as the renderer's (quiet-hours.js), so main never holds toasts the UI shows as on.
+  isQuiet: () => isQuietSince(loadSettings().uiQuietSince),
+});
+// S19: the taskbar badge (a red overlay dot while any pane needs you). Quiet hours never hold it.
+const needsYouTaskbar = createNeedsYouTaskbar({
+  platform: process.platform, getWindow: () => win, nativeImage, log: (line) => tlog(line),
 });
 // Canonical trusted entry document — the ONE definition shared by win.loadFile(), the
 // navigation lockdown, and the media-permission policy, so the three trust anchors can
@@ -807,6 +816,7 @@ app.whenReady().then(() => {
     publishView: (view) => {
       const delivered = paneStatusPublishers.publishView(view);
       paneStatusNotifications.observe(view);
+      needsYouTaskbar.observe(view);
       return delivered; // Keep renderer-delivery accounting independent of OS toast delivery.
     },
     publishSetupState: paneStatusPublishers.publishSetupState,
@@ -1062,7 +1072,7 @@ function killPaneTreesOnShutdown() {
 // Listeners run in registration order, so the tree kill runs before the controlled-run closure.
 app.on('before-quit', () => { killPaneTreesOnShutdown(); });
 app.on('before-quit', () => { closeControlledRunOnShutdown(); });
-app.on('will-quit', () => { paneStatusNotifications.dispose(); });
+app.on('will-quit', () => { paneStatusNotifications.dispose(); needsYouTaskbar.dispose(); });
 app.on('window-all-closed', () => {
   paneStatusNotifications.dispose();
   killPaneTreesOnShutdown();
@@ -1181,8 +1191,13 @@ handleTrustedIpc('save-settings', async (partial) => {
   if (Object.keys(partial).some((key) => !SETTING_KEYS.has(key))) {
     throw new Error(reportIpcRefusal('save-settings', 'unknown-setting'));
   }
-  const s = { ...loadSettings(), ...partial };
+  const before = loadSettings();
+  const s = { ...before, ...partial };
   saveSettings(s);
+  // S19: quiet hours just ended, so show the toasts they held (each only if its pane still waits).
+  if (partial && Object.hasOwn(partial, 'uiQuietSince') && !isQuietSince(partial.uiQuietSince) && isQuietSince(before.uiQuietSince)) {
+    paneStatusNotifications.releaseHeld();
+  }
   return s;
 });
 

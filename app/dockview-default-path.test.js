@@ -370,9 +370,9 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // `emblem-rail.js` publishes `window.ccEmblemRail` and builds only when app.js creates it.
   // S46 adds the daily idle-sessions view: 34 -> 35. `session-hygiene-view.js` publishes
   // `window.ccSessionHygieneView` and builds into #hygieneHost only when app.js asks it to.
-  // Issue #358 adds the Video Scout usage-line gate: 35 -> 36. `video-scout-usage-line.js` publishes
-  // `window.ccVideoScoutUsage` and touches no DOM.
-  assert(scriptTags === 36, `index.html loads exactly 36 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, the idle-sessions view (S46) and the Video Scout usage-line gate (#358) (found ${scriptTags})`);
+  // Issue #358 adds the Video Scout usage-line gate (one more tag).
+  // `video-scout-usage-line.js` publishes `window.ccVideoScoutUsage` and touches no DOM.
+  assert(scriptTags === 42, `index.html loads exactly 42 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), and S66's colour tokens, navigation shell, In-focus card and emblem rail, the idle-sessions view (S46), S19's needs-you strip, Pause all, cheat sheet, stall watch, pane header and right panel, and the Video Scout usage-line gate (#358) (found ${scriptTags})`);
   assert(/<script src="video-scout-usage-line\.js"><\/script>/.test(indexSrc),
     'the #358 Video Scout usage-line gate is loaded');
   assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),

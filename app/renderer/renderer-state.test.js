@@ -89,6 +89,8 @@ function setup(overrides = {}) {
     },
     documentElement: { setAttribute: noop, removeAttribute: noop },
     querySelectorAll: () => [],
+    // S19's needs-you strip looks for its host by ID; this harness has none, so the strip stays off.
+    getElementById: () => null,
     createElement: () => new Element(document),
     createTextNode(text) {
       const node = new Element(document);

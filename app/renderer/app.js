@@ -432,6 +432,9 @@ function showTermEmpty() {
   }
 }
 function openInAppTerminal(opts = {}) {
+  // S19: nothing new starts while Pause all is on (pause-all.js says so in Logs and the banner).
+  // Returns false when refused, so callers that do something first can tell (Resume, Start fresh).
+  if (pauseAll && pauseAll.refuseStart(opts.role ? (ROLES[opts.role] ? ROLES[opts.role].label : 'an agent') : 'a shell')) return false;
   // S10: Maximum never runs a Claude agent on this PC (authority-choice.js). No pane is created and
   // no PTY is requested: the task goes to a cloud session instead, through the vetted open-external
   // path. Main refuses a Claude pane at Maximum as well (app/authority-level.js).
@@ -457,6 +460,16 @@ function openInAppTerminal(opts = {}) {
   // Build the pane with safe DOM APIs (agent-dom.js): `label` and `worktree` derive from git
   // worktree metadata and must never be interpolated into innerHTML (AUDIT-REPORT.md finding #1).
   const pane = agentDom.buildTermPane(document, { badge, label, worktreeTitle: worktree || '', openReport: role === 'video-scout' && !claudeVideoScout });
+  // S19: the header's branch and authority tags (pane-header.js). The authority is the level this
+  // launch sends to pty-start below; the branch is from the worktree list (text only).
+  if (window.ccPaneHeader) {
+    const wt = worktree ? state.worktrees.find((w) => w.path === worktree) : null;
+    window.ccPaneHeader.mountTags(document, pane.querySelector('.term-head'), window.ccPaneHeader.describeTags({
+      cli, readOnly: role ? ROLES[role].readOnly === true : false, authority: state.authority, branch: wt && wt.branch ? wt.branch : '',
+    }));
+  } else {
+    appendLog('[pane-header] pane-header.js is missing; the header shows no branch or authority\n');
+  }
   $('#terminalGrid').appendChild(pane);
   const termBody = pane.querySelector('.term-body');
   const openTerminalLink = async (_event, uri) => {
@@ -754,6 +767,10 @@ function openInAppTerminal(opts = {}) {
     }
     else cc.ptyKill(id);
     term.dispose(); pane.remove(); terms.delete(id);
+    if (needsYouStrip) needsYouStrip.remove(id);
+    if (pauseAll) pauseAll.forget(id);
+    if (stallWatch) stallWatch.forget(id);
+    if (controlFocus) controlFocus.forget(id);
     if (terms.size === 0) showTermEmpty();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
@@ -770,6 +787,10 @@ function openInAppTerminal(opts = {}) {
     try { mouseSelectionFallback.dispose(); } catch {}
     if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
     term.dispose(); pane.remove(); terms.delete(id);
+    if (needsYouStrip) needsYouStrip.remove(id);
+    if (pauseAll) pauseAll.forget(id);
+    if (stallWatch) stallWatch.forget(id);
+    if (controlFocus) controlFocus.forget(id);
     if (terms.size === 0) showTermEmpty();
   };
   paneData.closePane = closeThisPane;
@@ -777,8 +798,9 @@ function openInAppTerminal(opts = {}) {
   pane.addEventListener('mousedown', (event) => {
     if (event.target.closest('.spk, .copy-out, .max')) return;
     activeTermId = id; term.focus();
+    if (controlFocus) controlFocus.select(id);
   });
-  term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
+  term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; if (controlFocus) controlFocus.select(id); });
   terms.set(id, paneData);
 
   // ---- TERMINAL LAUNCH TRANSACTION -------------------------------------------------------------
@@ -1252,6 +1274,17 @@ async function startLayoutEngine() {
 // its own scope — has to reach it to re-attach badges after a Dockview layout change. It stays `null`
 // until boot() runs, and every call site tolerates null rather than assuming construction succeeded.
 let paneStatusBadge = null;
+// S19: the "Needs you" strip, at module scope for the same reason: the pane close paths reach it.
+let needsYouStrip = null;
+// S19: what Pause all does to the panes (pause-all.js). Same reason: the close paths and
+// openInAppTerminal reach it.
+let pauseAll = null;
+// S19: the cheat sheet (cheat-sheet.js); the palette command reaches it.
+let cheatSheet = null;
+// S19: the stall watch in the pane headers (stall-watch.js); the PTY data and close paths reach it.
+let stallWatch = null;
+// S19: the control room's right panel (control-focus.js); pane focus, views and closes reach it.
+let controlFocus = null;
 
 // The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
 // the adapter never sees cc.*, a path, a role, a prompt, or report content.
@@ -1294,6 +1327,7 @@ function buildDockviewHost(container) {
     focusPane: (paneId) => {
       const t = terms.get(paneId);
       if (t) { activeTermId = paneId; try { t.term.focus(); } catch {} }
+      if (t && controlFocus) controlFocus.select(paneId);
     },
     // PANE STATUS re-attachment after a Dockview layout change. Dockview reparents pane elements,
     // which can drop the badge NODE; the STATE lives in the badge module keyed by pane id and is
@@ -1351,6 +1385,8 @@ async function offerResume() {
         appendLog('[resume] Maximum starts no local Claude pane, so nothing can be resumed here. Pick another authority level, then Resume.\n');
         return false;
       }
+      // S19: while Pause all is on nothing starts, and the row stays on offer.
+      if (pauseAll && pauseAll.refuseStart('a resumed pane')) return false;
       appendLog(`[resume] resuming a ${row.role || 'claude'} pane with claude --resume\n`);
       openInAppTerminal(Object.assign(paneOpts(row), { resumeSessionId: row.sessionId }));
       return true;
@@ -1361,6 +1397,8 @@ async function offerResume() {
         appendLog('[resume] Maximum starts no local Claude pane. Pick another authority level, then Start fresh.\n');
         return false;
       }
+      // S19: refused while paused, before the session is dismissed, so it is still offered later.
+      if (pauseAll && pauseAll.refuseStart('a fresh pane')) return false;
       dismiss(row);
       openInAppTerminal(paneOpts(row));
       return true;
@@ -1438,6 +1476,10 @@ const VIEWS = [['agents', 'Agents'], ['terminals', 'Terminals'], ['library', 'Li
 function shellCommands() {
   const cmds = [];
   for (const [tab, label] of VIEWS) cmds.push({ id: `view:${tab}`, label: `Open ${label}`, group: 'Control room', run: () => goToView(tab, label) });
+  cmds.push({ id: 'cheat-sheet', label: 'Show the cheat sheet (keys and phrases)', group: 'Control room', run: () => {
+    if (!cheatSheet) { appendLog('[cheat-sheet] not available (see the line above)\n'); if (shell) shell.showNotice('The cheat sheet is not available. The keys are on the Settings page.', 6000); return; }
+    cheatSheet.open();
+  } });
   cmds.push({ id: 'agent:new', label: 'New agent', group: 'Control room', run: () => {
     if (shell) { shell.closeSettings(); if (shell.getState().layout === 'tabs') shell.setTab('control'); }
     const btn = $('#newAgent');
@@ -1553,6 +1595,18 @@ function startShell(settings) {
   });
 }
 
+// S19: give the shell's Pause all button its effect. A pause restored from the last run sends no
+// Esc (the panes are new) but still holds new panes back; later changes come from the shell's event.
+function connectPauseAll() {
+  if (!pauseAll || !shell) return;
+  pauseAll.setPaused(shell.getState().pausedSince, { restored: true });
+  window.addEventListener('mako-shell-change', (e) => {
+    const d = e.detail || {};
+    pauseAll.setPaused(d.pausedSince || null);
+  });
+  shell.enableSwitch('pause');
+}
+
 async function boot() {
   // Listen before the first await: main sends its startup notices (credential store, issue #249)
   // once the page has loaded, and ipcRenderer drops a message that arrives with no listener.
@@ -1593,6 +1647,7 @@ async function boot() {
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
     if (t) { t.term.write(data); t.usageParser?.feed(data); }
+    if (stallWatch) stallWatch.noteOutput(id);
   });
   cc.onPtyExit(({ id }) => {
     const t = terms.get(id);
@@ -1653,8 +1708,126 @@ const paneStatusSetup = (window.ccPaneStatus && window.ccPaneStatusBadge)
       // integration work by supplying an element the real page does not have.
     })
   : null;
+// S19: the control room's "Needs you" strip (needs-you-strip.js). It reads the same token-free
+// pane-status views as the badge, keyed by pane id, and its chips and the F8 jump key only focus a
+// pane: nothing here sends anything to a PTY.
+function focusPaneFromStrip(paneId) {
+  const t = terms.get(paneId);
+  if (!t) return false;
+  if (!goToView('terminals', 'Terminals')) return false;
+  if (layoutInstance) {
+    try {
+      const panel = layoutInstance.api().getPanel(paneId);
+      if (panel && panel.api && typeof panel.api.setActive === 'function') panel.api.setActive();
+    } catch {
+      appendLog(`[needs-you] could not bring ${paneId} to the front (activate-failed)\n`);
+    }
+  }
+  activeTermId = paneId;
+  try { t.term.focus(); } catch { return false; }
+  return true;
+}
+const needsYouHost = document.getElementById('needsYouStrip');
+needsYouStrip = (window.ccNeedsYouStrip && needsYouHost)
+  ? window.ccNeedsYouStrip.createNeedsYouStrip({
+      doc: document,
+      host: needsYouHost,
+      log: appendLog,
+      getLabel: (paneId) => {
+        const t = terms.get(paneId);
+        const name = t && t.pane ? t.pane.querySelector('.name') : null;
+        return name ? name.textContent : paneId;
+      },
+      onFocus: focusPaneFromStrip,
+    })
+  : null;
+// S19: Pause all. Process control (a sensitive area): one Esc to each WORKING pane when Pause all
+// turns on, through the same cc.ptyWrite every keystroke uses; nothing is killed, and nothing new
+// starts while paused. The shell's button turns on only once this exists (connectPauseAll).
+pauseAll = window.ccPauseAll
+  ? window.ccPauseAll.createPauseAll({
+      write: (paneId, data) => cc.ptyWrite(paneId, data),
+      livePanes: () => [...terms.keys()],
+      log: appendLog,
+      notify: (text, ms) => { if (shell) shell.showNotice(text, ms); },
+    })
+  : null;
+if (!pauseAll) appendLog('[pause-all] pause-all.js is missing; the Pause all button stays off\n');
+// This part of boot() runs after startShell(), so the shell (if it started) is there to connect to.
+connectPauseAll();
+// S19: the stall watch. Every 30 seconds it reads S11's usage figures (a usage stop is never
+// "stalled") and repaints the pane headers.
+try {
+  stallWatch = window.ccStallWatch.createStallWatch({
+    doc: document, log: appendLog,
+    getHead: (paneId) => { const t = terms.get(paneId); return t && t.pane ? t.pane.querySelector('.term-head') : null; },
+  });
+} catch {
+  stallWatch = null;
+  appendLog('[stall-watch] REFUSED: the stall watch did not start (start-failed); pane headers show no stall\n');
+}
+if (stallWatch) {
+  let stallBusy = false;
+  let usageFailLogged = false;
+  setInterval(async () => {
+    if (stallBusy) return;
+    stallBusy = true;
+    try {
+      let usage = null;
+      try { usage = await cc.usageRead(); }
+      catch { if (!usageFailLogged) { usageFailLogged = true; appendLog('[stall-watch] usage figures unreadable (usage-read-failed); a usage stop may show as stalled\n'); } }
+      stallWatch.setUsage(usage);
+      stallWatch.tick();
+    } finally { stallBusy = false; }
+  }, 30000);
+}
+// S19: the right panel: S66's In-focus card for the selected pane. Open pane and Terminal focus it;
+// Interrupt sends one Esc to that pane through cc.ptyWrite (process control); nothing is killed.
+try {
+  controlFocus = window.ccControlFocus.createControlFocus({
+    doc: document, host: $('#controlFocus'), log: appendLog,
+    buildCard: (d, task, hs) => window.ccInFocusCard.buildInFocusCard(d, task, hs),
+    getPane: (paneId) => {
+      const t = terms.get(paneId);
+      if (!t || !t.pane) return null;
+      const text = (sel) => { const n = t.pane.querySelector(sel); return n ? n.textContent : ''; };
+      return { title: text('.term-head .name'), branch: text('.term-head .branch-tag'), authority: text('.term-head .auth-tag'), role: t.role && ROLES[t.role] ? ROLES[t.role].label : '' };
+    },
+    focusPane: focusPaneFromStrip,
+    write: (paneId, data) => cc.ptyWrite(paneId, data),
+  });
+} catch {
+  controlFocus = null;
+  appendLog('[control-focus] REFUSED: the right panel did not start (start-failed); panes work as before\n');
+}
+// S19: the cheat sheet, read from S66's one shortcut list each time it opens.
+try {
+  cheatSheet = window.ccCheatSheet.createCheatSheet({
+    doc: document, buttonHost: $('#cheatSheetHost'), dialogHost: document.body,
+    getShortcuts: () => (window.ccShellNav ? window.ccShellNav.SHORTCUTS : null),
+    log: appendLog,
+  });
+} catch {
+  cheatSheet = null;
+  appendLog('[cheat-sheet] REFUSED: the cheat sheet did not start (start-failed); the keys are on the Settings page\n');
+}
+if (!needsYouStrip) appendLog('[needs-you] the strip is missing (needs-you-strip.js or #needsYouStrip); panes that need you show only on their badges\n');
+if (needsYouStrip) {
+  // F8 on window in the capture phase, so the terminal never sees it.
+  window.addEventListener('keydown', (e) => {
+    if (!window.ccNeedsYouStrip.isJumpKey(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    needsYouStrip.jumpNext();
+  }, true);
+  // Keep the waiting minutes current.
+  setInterval(() => needsYouStrip.render(), 30000);
+}
 if (paneStatusBadge) {
   window.ccPaneStatus.onView((view) => {
+    if (needsYouStrip) needsYouStrip.update(view);
+    if (pauseAll) pauseAll.noteView(view);
+    if (stallWatch) stallWatch.noteView(view);
+    if (controlFocus) controlFocus.noteView(view);
     const shown = paneStatusBadge.update(view);
     if (shown && view && view.paneId) {
       appendLog(`[pane-status] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);
@@ -2755,6 +2928,8 @@ async function handleClaudeVideoEvent({ id, token, status, estimate, pcm }) {
 }
 
 async function createAgent() {
+  // S19: while Pause all is on, refuse before any worktree or branch is made (the dialog stays open).
+  if (pauseAll && pauseAll.refuseStart('a new agent')) return;
   await cc.tlogReset();
   appendLog('[TIMING] createAgent: START\n');
   const role = state.chosenRole;
