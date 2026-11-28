@@ -36,4 +36,5 @@ $mode = if ($Apply) { 'APPLY' } else { 'DRY-RUN (no changes written)' }
 Write-Host "Video-scout retention sweep - $mode" -ForegroundColor Cyan
 $summary | Format-List | Out-String | Write-Host
 if ($summary.refused) { exit 3 }
+if ($summary.failed -gt 0 -or $summary.warning -eq 'sweep-internal-error') { exit 1 }
 exit 0

@@ -53,9 +53,12 @@ function electronProcessCensus() {
   const ps = require(path.join(APP_DIR, 'pane-status', 'pane-status-lock')).resolveWindowsPowerShellPath(process.env);
   if (!ps.ok) return { ok: false, reason: ps.reason };
   const r = cp.spawnSync(ps.path, ['-NoProfile', '-NonInteractive', '-Command',
-    '$p = @(Get-Process -Name electron -ErrorAction SilentlyContinue); '
+    // Progress records would reach stderr when it is piped and fail a good census.
+    '$ErrorActionPreference = "Stop"; $ProgressPreference = "SilentlyContinue"; '
+    + '$p = @(Get-Process | Where-Object { $_.ProcessName -eq "electron" }); '
     + '"" + $p.Count + " " + @($p | Where-Object { $_.MainWindowHandle -ne 0 }).Count'],
   { windowsHide: true, encoding: 'utf8', timeout: 30000 });
+  if (r.error || r.status !== 0 || r.stderr) return { ok: false, reason: 'census-command-failed' };
   const m = /^(\d+)\s+(\d+)$/.exec(String(r.stdout || '').trim());
   if (!m) return { ok: false, reason: 'census-unparseable' };
   return { ok: true, processes: Number(m[1]), windows: Number(m[2]) };
@@ -135,6 +138,7 @@ for (let i = 0; i < RUNS; i++) {
 }
 
 const after = electronProcessCensus();
+const censusAvailable = before.ok && after.ok;
 const sorted = timings.slice().sort((a, b) => a - b);
 const fmt = (n) => (n === null ? 'n/a' : n.toFixed(1) + 'ms');
 
@@ -147,11 +151,12 @@ process.stdout.write(`  min             : ${fmt(sorted[0])}\n`);
 process.stdout.write(`  exit codes      : ${JSON.stringify(Object.fromEntries(exits))}\n`);
 process.stdout.write(`  stdout escaped  : ${stdoutEscaped} of ${RUNS}\n`);
 process.stdout.write(`  stderr escaped  : ${stderrEscaped} of ${RUNS}\n`);
-if (before.ok && after.ok) {
+if (censusAvailable) {
   process.stdout.write(`  electron procs  : ${before.processes} before -> ${after.processes} after (residue ${after.processes - before.processes})\n`);
   process.stdout.write(`  electron windows: ${before.windows} before -> ${after.windows} after (appeared ${after.windows - before.windows})\n`);
 } else {
-  process.stdout.write(`  process census  : UNAVAILABLE (${(before.ok ? after : before).reason})\n`);
+  if (!before.ok) process.stdout.write(`  process census  : UNAVAILABLE (before: ${before.reason})\n`);
+  if (!after.ok) process.stdout.write(`  process census  : UNAVAILABLE (after: ${after.reason})\n`);
 }
 process.stdout.write('\n');
 process.stdout.write('ENROLLED PER-TOOL-CALL OVERHEAD IS NOT MEASURED BY THIS HARNESS. PRETOOLUSE AND\n');
@@ -161,4 +166,4 @@ process.stdout.write('CONTROLLED-LIVE ACCEPTANCE MEASUREMENT, NOT EVIDENCE ESTAB
 try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ }
 
 const badExit = Array.from(exits.keys()).some((k) => k !== '0');
-process.exit((badExit || stdoutEscaped || stderrEscaped) ? 1 : 0);
+process.exitCode = (badExit || stdoutEscaped || stderrEscaped || !censusAvailable) ? 1 : 0;
