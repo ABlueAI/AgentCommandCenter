@@ -6,7 +6,7 @@
 // tab's history (S18) and Ctrl+F read. Data only: no IPC, no UI and no process is started here.
 //
 // Where merges come from: the local clone's first-parent merge commits on main
-// (`git log --first-parent --merges --format=%H%x09%cI%x09%s <ref>`), whose subjects GitHub writes as
+// (`git log -z --first-parent --merges --format=<GIT_LOG_FORMAT> <ref>`), whose subjects GitHub writes as
 // "Merge pull request #N from owner/branch". parseGitMergeLog turns that text into merge records, so
 // no GitHub token or network call is needed. Running git is left to the caller.
 //
@@ -28,7 +28,7 @@ const MAX_REPO_LENGTH = 140;       // owner/name: GitHub caps owner at 39 and na
 const SHA_RE = /^[0-9a-f]{40}$/;
 const REPO_RE = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
 const SESSION_RE = /^(S\d{1,3}):/;
-const BRANCH_SESSION_RE = /^[A-Za-z0-9._-]+\/s(\d{1,3})-/i;
+const BRANCH_SESSION_RE = /^(?:claude|codex)\/s(\d{1,3})-/i;
 const MERGE_SUBJECT_RE = /^Merge pull request #(\d{1,7}) from ([A-Za-z0-9-]{1,39})\/(\S{1,255})$/;
 const NO_SESSION = 'other';
 
@@ -45,6 +45,10 @@ const REASON = Object.freeze({
 });
 
 function refuse(reason, extra) { return Object.assign({ ok: false, reason }, extra || {}); }
+
+function filesystemError(operation, error) {
+  return { operation, errorCode: typeof error?.code === 'string' ? error.code : null };
+}
 
 // Strict ISO 8601 with a time zone (what `git log %cI` and toISOString write). Date.parse alone would
 // accept text such as '1' or 'Nov 25 2026' and guess a time.
@@ -82,13 +86,18 @@ function keyOf(r) { return `${r.repo.toLowerCase()}#${r.number}`; }
 
 function parseText(text) {
   let doc;
-  try { doc = JSON.parse(text); } catch { return refuse(REASON.INVALID); }
+  try { doc = JSON.parse(text); } catch { return refuse(REASON.INVALID, { detail: 'invalid-json' }); }
   if (!doc || typeof doc !== 'object' || doc.version !== VERSION || !Array.isArray(doc.records)) {
-    return refuse(REASON.INVALID);
+    return refuse(REASON.INVALID, { detail: 'invalid-document' });
   }
-  if (doc.records.length > MAX_RECORDS || !doc.records.every(validRecord)) return refuse(REASON.INVALID);
-  const keys = new Set(doc.records.map(keyOf));
-  if (keys.size !== doc.records.length) return refuse(REASON.INVALID);
+  if (doc.records.length > MAX_RECORDS) return refuse(REASON.INVALID, { detail: 'record-limit', max: MAX_RECORDS });
+  const keys = new Set();
+  for (const [index, record] of doc.records.entries()) {
+    if (!validRecord(record)) return refuse(REASON.INVALID, { detail: 'invalid-record', index });
+    const key = keyOf(record);
+    if (keys.has(key)) return refuse(REASON.INVALID, { detail: 'duplicate-record', index });
+    keys.add(key);
+  }
   return { ok: true, records: doc.records };
 }
 
@@ -104,34 +113,40 @@ function normaliseMerge(m) {
     session: sessionOf(title) || sessionOfBranch(branch) };
 }
 
-// The git command whose output parseGitMergeLog reads. Each commit ends with the record separator
-// (0x1e), so a merge commit's body, which can span lines, stays with its commit.
-const GIT_LOG_FORMAT = '%H%x09%cI%x09%s%x09%b%x1e';
+// Separate the four fields with NUL and let git log -z terminate each record with NUL as well.
+const GIT_LOG_FORMAT = '%H%x00%cI%x00%s%x00%b';
 
-// Parses `git log --first-parent --merges --format=<GIT_LOG_FORMAT> <ref>` output into merges for
+// Parses `git log -z --first-parent --merges --format=<GIT_LOG_FORMAT> <ref>` output into merges for
 // `repo`. GitHub writes a PR merge's subject as "Merge pull request #N from owner/branch" and puts the
 // PR title on the first line of the body, which gives the merge its title and plan session.
-// Commits that aren't a GitHub PR merge (a local merge, for instance) are skipped and counted, so the
-// caller can show how many it ignored instead of hiding them. A malformed entry is refused.
+// A skipped non-PR merge includes its subject, commit and zero-based log index. A malformed record
+// refuses the entire log with the same kind of index.
 function parseGitMergeLog(repo, text) {
-  if (!isRepo(repo)) return refuse(REASON.BAD_MERGE);
-  if (typeof text !== 'string') return refuse(REASON.BAD_MERGE);
+  if (!isRepo(repo)) return refuse(REASON.BAD_MERGE, { detail: 'invalid-repository' });
+  if (typeof text !== 'string') return refuse(REASON.BAD_MERGE, { detail: 'invalid-log-text' });
   const merges = [];
-  let skipped = 0;
-  const entries = text.split('\x1e').map((e) => e.replace(/^[\r\n]+/, '')).filter((e) => e.trim().length > 0);
-  for (const entry of entries) {
-    const parts = entry.split('\t');
-    if (parts.length < 4) return refuse(REASON.BAD_MERGE, { entry: entry.slice(0, 200) });
-    const [sha, when, subject] = parts;
-    const body = parts.slice(3).join('\t');
-    if (!isSha(sha) || !isIsoTime(when)) return refuse(REASON.BAD_MERGE, { entry: entry.slice(0, 200) });
+  const skippedRecords = [];
+  if (text.trim() === '') return { ok: true, merges, skipped: 0, skippedRecords };
+  const fields = text.split('\0');
+  const trailingText = fields.pop();
+  if (trailingText !== '' || fields.length % 4 !== 0) {
+    return refuse(REASON.BAD_MERGE, { detail: 'incomplete-record', index: Math.floor(fields.length / 4) });
+  }
+  for (let offset = 0; offset < fields.length; offset += 4) {
+    const index = offset / 4;
+    const [sha, when, subject, body] = fields.slice(offset, offset + 4);
+    if (!isSha(sha)) return refuse(REASON.BAD_MERGE, { detail: 'invalid-merge-sha', index });
+    if (!isIsoTime(when)) return refuse(REASON.BAD_MERGE, { detail: 'invalid-merged-at', index });
     const m = MERGE_SUBJECT_RE.exec(subject);
-    if (!m) { skipped++; continue; }
+    if (!m) {
+      skippedRecords.push({ index, mergeSha: sha, subject });
+      continue;
+    }
     const first = body.split(/\r?\n/)[0].trim();
     const title = first.length > 0 && first.length <= MAX_TEXT_LENGTH ? first : null;
     merges.push({ repo, number: Number(m[1]), mergeSha: sha, mergedAt: when, title, branch: m[3] });
   }
-  return { ok: true, merges, skipped };
+  return { ok: true, merges, skipped: skippedRecords.length, skippedRecords };
 }
 
 function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Date() } = {}) {
@@ -145,14 +160,14 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
     try { stat = fsImpl.lstatSync(filePath); }
     catch (error) {
       if (error && error.code === 'ENOENT') return { ok: true, records: [] };
-      return refuse(REASON.READ_FAILED);
+      return refuse(REASON.READ_FAILED, filesystemError('lstatSync', error));
     }
     if (stat.isSymbolicLink()) return refuse(REASON.REPARSE_POINT);
     if (!stat.isFile()) return refuse(REASON.NOT_REGULAR_FILE);
-    if (stat.size > MAX_FILE_BYTES) return refuse(REASON.TOO_LARGE);
+    if (stat.size > MAX_FILE_BYTES) return refuse(REASON.TOO_LARGE, { size: stat.size, max: MAX_FILE_BYTES });
     let text;
     try { text = fsImpl.readFileSync(filePath, 'utf8'); }
-    catch { return refuse(REASON.READ_FAILED); }
+    catch (error) { return refuse(REASON.READ_FAILED, filesystemError('readFileSync', error)); }
     return parseText(text);
   }
 
@@ -169,10 +184,17 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
       fsImpl.closeSync(fd);
       fd = null;
       fsImpl.renameSync(tempPath, filePath);
-    } catch {
-      if (fd !== null) { try { fsImpl.closeSync(fd); } catch { /* bounded cleanup */ } }
-      try { fsImpl.rmSync(tempPath, { force: true }); } catch { /* bounded cleanup */ }
-      return refuse(REASON.WRITE_FAILED);
+    } catch (error) {
+      const result = refuse(REASON.WRITE_FAILED, filesystemError('write', error));
+      const cleanupErrors = [];
+      if (fd !== null) {
+        try { fsImpl.closeSync(fd); }
+        catch (cleanupError) { cleanupErrors.push(filesystemError('closeSync', cleanupError)); }
+      }
+      try { fsImpl.rmSync(tempPath, { force: true }); }
+      catch (cleanupError) { cleanupErrors.push(filesystemError('rmSync', cleanupError)); }
+      if (cleanupErrors.length) result.cleanupErrors = cleanupErrors;
+      return result;
     }
     return { ok: true };
   }
@@ -181,16 +203,17 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
   // written: one bad or conflicting merge refuses the whole batch, so a half-recorded batch can't
   // happen. A merge already recorded with the same commit is counted as a duplicate and left alone.
   // A title given later for a merge recorded without one is filled in (the only field ever changed).
+  // Count merges with an ignored title or branch in mismatched, even when a title was filled in.
   // Nothing is ever dropped (Blue, 2026-11-11: "nothing really ever disappears unless it's
   // explicitly deleted or told to be deleted"):
   // a batch that would take the store past MAX_RECORDS is refused whole, and the file is left as it is.
   // A new merge takes the spelling of its repository already stored, so letter case never splits one.
   function recordMerges(merges) {
-    if (!Array.isArray(merges)) return refuse(REASON.BAD_MERGE);
+    if (!Array.isArray(merges)) return refuse(REASON.BAD_MERGE, { detail: 'invalid-batch' });
     const incoming = [];
-    for (const m of merges) {
+    for (const [index, m] of merges.entries()) {
       const n = normaliseMerge(m);
-      if (!n) return refuse(REASON.BAD_MERGE);
+      if (!n) return refuse(REASON.BAD_MERGE, { detail: 'invalid-merge', index });
       incoming.push(n);
     }
     const cur = read();
@@ -202,12 +225,15 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
     let added = 0;
     let duplicates = 0;
     let titled = 0;
-    for (const n of incoming) {
+    let mismatched = 0;
+    for (const [index, n] of incoming.entries()) {
       const k = keyOf(n);
       const existing = byKey.get(k);
       if (existing) {
         if (existing.mergeSha !== n.mergeSha) {
-          return refuse(REASON.CONFLICTING_MERGE, { repo: n.repo, number: n.number });
+          return refuse(REASON.CONFLICTING_MERGE, {
+            index, repo: n.repo, number: n.number, existingMergeSha: existing.mergeSha, incomingMergeSha: n.mergeSha,
+          });
         }
         if (existing.title === null && n.title !== null) {
           existing.title = n.title;
@@ -215,6 +241,9 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
           titled++;
         } else {
           duplicates++;
+        }
+        if ((n.title !== null && n.title !== existing.title) || (n.branch !== null && n.branch !== existing.branch)) {
+          mismatched++;
         }
         continue;
       }
@@ -225,12 +254,13 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
       byKey.set(k, rec);
       added++;
     }
-    if (added === 0 && titled === 0) return { ok: true, added, duplicates, titled };
+    const result = { ok: true, added, duplicates, titled, mismatched };
+    if (added === 0 && titled === 0) return result;
     if (records.length > MAX_RECORDS) return refuse(REASON.FULL, { max: MAX_RECORDS });
     records.sort((a, b) => Date.parse(a.mergedAt) - Date.parse(b.mergedAt) || a.number - b.number);
     const w = write(records);
     if (!w.ok) return w;
-    return { ok: true, added, duplicates, titled };
+    return result;
   }
 
   function recordMerge(merge) { return recordMerges([merge]); }
