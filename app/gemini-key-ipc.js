@@ -28,7 +28,8 @@ function createGeminiKeyIpc(deps) {
     if (typeof fn !== 'function') throw new Error(`gemini-key-ipc: ${name} must be a function.`);
   }
 
-  // `what` and `reason` are fixed strings from this file or the gate's bounded constants.
+  // `what` is fixed. The reason returned in `error` uses fixed text from here or the sender gate
+  // and can include an error code formatted by `codeOf` for a caught failure.
   function refuse(what, reason) {
     logRefusal(`Gemini key ${what} refused: ${reason}`);
     return { ok: false, error: reason };
