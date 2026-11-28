@@ -509,7 +509,8 @@ test('Video Scout offers both providers and Claude bypasses the Gemini key and l
   assert.match(html, /<input type="checkbox" id="claudeDetailMode" \/> Detail mode/);
   assert.match(html, /<script src="claude-video-settings\.js"><\/script>/);
   const controls = Object.fromEntries([
-    ['#videoProviderSelect', { value: 'claude' }], ['#taskName', { value: url }],
+    ['#videoProviderSelect', { value: 'claude' }], ['#taskName', { value: url, setAttribute: () => {} }],
+    ['#modalCreate', {}], ['#videoUrlError', { classList: { toggle: () => {} } }],
     ['#geminiVideoOptions', { classList: { toggle: (_class, hidden) => { controls.geminiHidden = hidden; } } }],
     ['#claudeVideoOptions', { classList: { toggle: (_class, hidden) => { controls.claudeHidden = hidden; } } }],
   ]);
@@ -520,17 +521,21 @@ test('Video Scout offers both providers and Claude bypasses the Gemini key and l
     $: (id) => controls[id], URL, ROLES: { 'video-scout': { video: true } },
     state: { chosenRole: 'video-scout', repo: '/synthetic', analysisMode: 'transcript', videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM' },
     cc: { tlogReset: async () => {}, getGeminiKeyStatus: async () => { geminiChecks++; return { ok: true, hasKey: true }; } },
-    updateModalHint: () => {}, closeModal: () => {}, openInAppTerminal: (launch) => launches.push(launch),
+    updateModalHint: () => {},
+    closeModal: () => vm.runInContext('releaseVideoSubmission()', context),
+    openInAppTerminal: (launch) => launches.push(launch),
     appendLog: () => {}, clearSliceRowErrors: () => {}, collectSliceRowValues: () => [],
     videoRangeUi: { detectStaleSliceRows: () => null }, readVideoAnalysisFocus: () => ({}),
     readClaudeVideoSettings: () => settingsResult,
   });
   const sync = js.slice(js.indexOf('function syncVideoProvider()'), js.indexOf('// Reflect what the modal'));
-  const start = js.indexOf('async function createAgent()');
+  const start = js.indexOf('async function launchVideoScout(');
   const upToVideoScout = js.slice(start, js.indexOf('  // S15 Page Reader:', start));
+  const fieldError = js.slice(js.indexOf('function showVideoUrlError('), js.indexOf('function syncVideoProvider()'));
+  const guard = js.slice(js.indexOf('let videoSubmission ='), js.indexOf('function openModal()'));
   // main's #161 helper: the Gemini key status call goes through geminiKeyStatusOrLog.
   const keyStatus = js.slice(js.indexOf('async function geminiKeyStatusOrLog()'), js.indexOf('function updateKeyBanner('));
-  vm.runInContext(keyStatus + sync + upToVideoScout + '\n}', context);
+  vm.runInContext(keyStatus + fieldError + sync + guard + upToVideoScout + '\n}', context);
   await vm.runInContext('syncVideoProvider(); createAgent()', context);
   assert(controls.geminiHidden && !controls.claudeHidden);
   assert.equal(geminiChecks, 0);
