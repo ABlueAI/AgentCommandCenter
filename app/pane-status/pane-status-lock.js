@@ -36,41 +36,9 @@ const LOCK_REFUSAL = Object.freeze({
   MISSING: 'lock-missing',
   CREATE_FAILED: 'lock-create-failed',
   CLEANUP_FAILED: 'lock-create-failed-and-not-cleaned',
-  POWERSHELL_UNRESOLVED: 'liveness-resolver-unavailable',
 });
 
 function lockPath(settingsDir) { return path.join(settingsDir, LOCK_BASENAME); }
-
-// The Windows PowerShell executable, resolved as a BOUNDED ABSOLUTE PATH under the system directory.
-//
-// CORRECTION (advisory review, finding 7): main.js previously chose the liveness resolver's executable
-// with `process.env.ComSpec ? 'powershell.exe' : 'powershell.exe'` — a ternary whose two branches are
-// identical, so it read an environment variable and then ignored it, and either way handed a BARE NAME
-// to execFile. A bare name is resolved through PATH, and PATH is attacker-influenced on a shared
-// machine. This is the only place in the subsystem that decides which PowerShell runs, so it resolves
-// one absolute path and checks that it is really there.
-//
-// PATH is never consulted. ComSpec is never consulted. Nothing the renderer can supply reaches this.
-// A missing or unusable executable is a REFUSAL, which the caller turns into liveness-unknown and
-// therefore into a conservative refusal to clear the lock — never into an assumption that the owner
-// is dead.
-const WINDOWS_POWERSHELL_RELATIVE = Object.freeze(['System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe']);
-
-function resolveWindowsPowerShellPath(env, existsSync) {
-  const e = env || {};
-  const exists = typeof existsSync === 'function' ? existsSync : fs.existsSync;
-  const root = (typeof e.SystemRoot === 'string' && e.SystemRoot)
-    ? e.SystemRoot
-    : ((typeof e.windir === 'string' && e.windir) ? e.windir : 'C:\\Windows');
-  if (typeof root !== 'string' || !root || !path.isAbsolute(root)) {
-    return { ok: false, reason: LOCK_REFUSAL.POWERSHELL_UNRESOLVED };
-  }
-  const candidate = path.join(root, ...WINDOWS_POWERSHELL_RELATIVE);
-  let present = false;
-  try { present = !!exists(candidate); } catch { present = false; }
-  if (!present) return { ok: false, reason: LOCK_REFUSAL.POWERSHELL_UNRESOLVED };
-  return { ok: true, path: candidate };
-}
 
 /**
  * This process's start time, in ms epoch, WITHOUT spawning anything. process.uptime() is seconds of
@@ -330,8 +298,6 @@ const api = {
   LOCK_SCHEMA_VERSION,
   LOCK_REFUSAL,
   START_TIME_TOLERANCE_MS,
-  WINDOWS_POWERSHELL_RELATIVE,
-  resolveWindowsPowerShellPath,
   lockPath,
   ownStartTimeMs,
   buildLockBody,

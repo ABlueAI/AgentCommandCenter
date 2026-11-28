@@ -272,9 +272,12 @@ async function driveRealRoute(execFileStub, baseline) {
   Module._load = function (request) {
     if (request === 'electron') return electronStub;
     if (request === '@lydell/node-pty') return ptyStub;
-    // main.js does `require('child_process').execFile` INSIDE the resolveVersion closure, so this
-    // hook must still be installed when the closure runs, not merely while main.js evaluates.
     if (request === 'child_process' || request === 'node:child_process') return childProcessMock;
+    if (request === './helper-programs' && process.platform !== 'win32') {
+      const real = realLoad.apply(this, arguments);
+      // Keep the real launch validation and substitute only the Windows executable on Linux.
+      return { ...real, path: (name) => name === 'powershell' ? process.execPath : real.path(name) };
+    }
     // Capture the deps main.js really passes, without replacing the controller's behaviour.
     if (/pane-status-controller$/.test(request)) {
       const real = realLoad.apply(this, arguments);

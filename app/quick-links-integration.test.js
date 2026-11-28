@@ -77,12 +77,15 @@ assert(currentMain.includes("ipcMain.handle('quick-links-preset-open', (e, id) =
 assert(currentMain.includes('presets: createQuickLinksPresets({'),
   'main injects the Firefox preset service into the Quick Links IPC boundary');
 {
-  // Every refusal reason the preset service or resolveFirefoxExe can return must be in the IPC
-  // allowlist, or it would reach the renderer bounded to store-failure.
+  // Include the errors produced by the real Firefox resolver as well as the preset service.
   const { ALLOWED_REASONS } = require('./quick-links-ipc');
-  const firefoxResolver = (read('launchers.js').split('function resolveFirefoxExe')[1] || '').split('\nfunction ')[0];
-  const reasons = [...(read('quick-links-presets.js') + firefoxResolver).matchAll(/(?:refuse\(|reason: )'([a-z0-9-]+)'/g)]
+  const { createHelperPrograms } = require('./helper-programs');
+  const resolve = (isExecutable) => createHelperPrograms({
+    platform: 'win32', env: { ProgramFiles: 'X:\\Programs' }, isExecutable,
+  }).resolve('firefox').reason;
+  const reasons = [...read('quick-links-presets.js').matchAll(/refuse\('([a-z0-9-]+)'/g)]
     .map((m) => m[1]);
+  reasons.push(resolve(() => false), resolve(() => { throw new Error('unreadable'); }));
   assert(reasons.length >= 15, `preset reason scan found the refusal literals (${reasons.length})`);
   const missing = reasons.filter((r) => !ALLOWED_REASONS.has(r));
   assert(missing.length === 0, `every preset and Firefox refusal reason is allowlisted (missing: ${missing.join(',') || 'none'})`);

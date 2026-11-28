@@ -8,7 +8,7 @@ const path = require('node:path');
 const { after, test: runTest } = require('node:test');
 const vm = require('node:vm');
 const {
-  analyzeVideo, findTool, MAX_CANDIDATES, MAX_TRANSCRIPT_CHARS, frameArgs, sampleArgs, runProcess, ScoutError, parseFrameLog, differenceHash, hammingDistance,
+  analyzeVideo, MAX_CANDIDATES, MAX_TRANSCRIPT_CHARS, frameArgs, sampleArgs, runProcess, ScoutError, parseFrameLog, differenceHash, hammingDistance,
   chooseFrames, planBatches, scaledSize, estimateRun, formatEstimate, formatTime, HASH_BYTES,
 } = require('./claude-video-scout');
 const { createClaudeVideoScoutIpc } = require('./claude-video-scout-ipc');
@@ -714,38 +714,8 @@ test('the real process runner times out, caps output and reports a missing execu
   assert.equal(slow.stopped, 'timed out');
   const loud = await runProcess(process.execPath, ['-e', "process.stdout.write('x'.repeat(3 * 1024 * 1024)); setInterval(() => {}, 1000)"], { ...opts, timeoutMs: 10000 });
   assert.equal(loud.stopped, 'produced too much output');
-  const missing = await runProcess(path.join(os.tmpdir(), 'mako-no-such-tool-' + process.pid), [], { ...opts, timeoutMs: 5000 });
+  const missing = await runProcess(path.join(os.tmpdir(), 'mako-no-such-tool-' + process.pid + (process.platform === 'win32' ? '.exe' : '')), [], { ...opts, timeoutMs: 5000 });
   assert.equal(missing.error?.code, 'ENOENT');
-});
-
-test('findTool ignores relative PATH entries and folders, strips quotes, and on Windows finds the npm claude.exe', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'test-s54-path-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const exe = (name) => (process.platform === 'win32' ? name + '.exe' : name);
-  const spaced = path.join(root, 'with space');
-  const folderOnly = path.join(root, 'folder-only');
-  await fs.mkdir(spaced);
-  await fs.mkdir(path.join(folderOnly, exe('sometool')), { recursive: true });
-  await fs.writeFile(path.join(spaced, exe('sometool')), 'fake', { mode: 0o755 });
-  // Run from the temp folder so 'with space' is a real relative entry that would resolve to the tool.
-  // (path.relative would return an absolute path when the temp folder is on another drive, as on CI.)
-  const previous = process.cwd();
-  process.chdir(root);
-  try {
-    assert.equal(await findTool('sometool', { PATH: 'with space' }), null, 'a relative PATH entry is never searched');
-  } finally {
-    process.chdir(previous);
-  }
-  assert.equal(await findTool('sometool', { PATH: folderOnly }), null, 'a folder with the tool’s name is not the tool');
-  assert.equal(await findTool('sometool', { Path: [folderOnly, `"${spaced}"`].join(path.delimiter) }), path.join(spaced, exe('sometool')));
-  if (process.platform === 'win32') {
-    const npm = path.join(root, 'npm');
-    const native = path.join(npm, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
-    await fs.mkdir(path.dirname(native), { recursive: true });
-    await fs.writeFile(path.join(npm, 'claude.cmd'), 'fake shim');
-    await fs.writeFile(native, 'fake');
-    assert.equal(await findTool('claude', { PATH: npm }), native, 'the native claude.exe is used, never the .cmd shim');
-  }
 });
 
 test('IPC refuses credentials, ports, bad pane IDs and over-long focus before any work', async () => {

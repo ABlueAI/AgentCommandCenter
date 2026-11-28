@@ -1,8 +1,7 @@
 'use strict';
 
-const { spawn } = require('node:child_process');
+const helpers = require('./helper-programs');
 const fs = require('node:fs/promises');
-const { constants } = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { copyAllowedWindowsEnv } = require('./pty-env');
@@ -64,36 +63,18 @@ function toolEnvironment(baseEnv) {
   ]);
 }
 
-async function findTool(name, env) {
-  const pathKey = Object.keys(env).find((key) => key.toUpperCase() === 'PATH');
-  const windows = process.platform === 'win32';
-  const dirs = (env[pathKey] || '').split(path.delimiter);
-  for (const entry of dirs) {
-    const dir = entry.replace(/^"(.*)"$/, '$1');
-    if (!path.isAbsolute(dir)) continue;
-    const candidates = [path.join(dir, windows ? name + '.exe' : name)];
-    // The Windows npm installation may expose only a shim on PATH. Its package also
-    // installs this native executable, which can be invoked without cmd or PowerShell.
-    if (windows && name === 'claude') {
-      candidates.push(path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe'));
-    }
-    for (const file of candidates) {
-      try {
-        await fs.access(file, constants.X_OK);
-        if ((await fs.stat(file)).isFile()) return file;
-      } catch (err) {
-        if (!['ENOENT', 'ENOTDIR', 'EACCES'].includes(err.code)) throw err;
-      }
-    }
-  }
-  return null;
+function findTool(name) {
+  const result = helpers.resolve(name);
+  if (result.ok) return result.exe;
+  if (result.reason === `${name}-not-found`) return null;
+  throw new ScoutError(`${name} could not be resolved (${result.reason}).`);
 }
 
 function runProcess(exe, args, { cwd, env, signal, input, timeoutMs, killTree }) {
   if (signal.aborted) return Promise.resolve({ stopped: 'cancelled' });
   return new Promise((resolve, reject) => {
     const windows = process.platform === 'win32';
-    const child = spawn(exe, args, {
+    const child = helpers.spawn(exe, args, {
       cwd, env, shell: false, windowsHide: true, detached: !windows,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -161,7 +142,7 @@ function processRefusal(result, label) {
   if (result.stopped === 'cancelled') throw new ScoutError(CANCELLED);
   if (result.stopped) throw new ScoutError(`${label} ${result.stopped}.`);
   if (result.error) {
-    if (result.error.code === 'ENOENT') throw new ScoutError(`${label} executable is missing. Check PATH and restart Mako.`);
+    if (result.error.code === 'ENOENT') throw new ScoutError(`${label} executable is missing. Check the installation and restart Mako.`);
     throw new ScoutError(`${label} could not start or communicate with Mako (${errorLabel(result.error)}).`);
   }
 }
@@ -490,7 +471,7 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
   const longEdge = settings.detailMode ? settings.detailLongEdge : settings.longEdge;
   const env = toolEnvironment(baseEnv);
   const claude = await locate('claude', env);
-  if (!claude) throw new ScoutError('Claude Code CLI is missing. Put its executable on PATH and restart Mako.');
+  if (!claude) throw new ScoutError('Claude Code CLI is missing. Check the installation and restart Mako.');
   // Claude safe mode still honors managed settings, which can configure credential
   // helpers and hooks. Reuse Mako's established check before starting even the auth probe.
   if (!verifyPolicy()?.ok) {
@@ -510,7 +491,7 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
     const tools = {};
     for (const name of ['yt-dlp', 'ffprobe', 'ffmpeg']) {
       tools[name] = await locate(name, env);
-      if (!tools[name]) throw new ScoutError(`${name} is missing. Put its executable on PATH and restart Mako.`);
+      if (!tools[name]) throw new ScoutError(`${name} is missing. Check the installation and restart Mako.`);
     }
     const video = path.join(dir, 'video.mp4');
     progress('Checking video availability…');
@@ -650,7 +631,7 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
 }
 
 module.exports = {
-  analyzeVideo, ScoutError, CANCELLED, ESTIMATE_CANCELLED, errorLabel, runProcess, findTool, MAX_TRANSCRIPT_CHARS, CONFIRM_TIMEOUT_MS, MAX_CANDIDATES,
+  analyzeVideo, ScoutError, CANCELLED, ESTIMATE_CANCELLED, errorLabel, runProcess, MAX_TRANSCRIPT_CHARS, CONFIRM_TIMEOUT_MS, MAX_CANDIDATES,
   sampleArgs, frameArgs, parseFrameLog, differenceHash, hammingDistance, chooseFrames, planBatches,
   scaledSize, estimateRun, formatEstimate, formatTime, HASH_BYTES,
 };

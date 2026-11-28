@@ -34,7 +34,9 @@ function fixture(options = {}) {
   const configFile = path.join(root, 'quick-links-presets.json');
   const calls = [];
   const api = createQuickLinksPresets({
-    settingsDir: root, appData: root, isWin: options.isWin !== false, env: { ProgramFiles: root },
+    settingsDir: root, appData: root, isWin: options.isWin !== false,
+    resolveFirefox: () => fs.statSync(exe, { throwIfNoEntry: false })?.isFile()
+      ? { ok: true, exe } : { ok: false, reason: 'firefox-not-found' },
     spawnFirefox(...request) {
       calls.push(request);
       const child = new EventEmitter();

@@ -2,7 +2,7 @@
 // Run: node app/launchers.test.js
 // Plain Node.js — no framework. P12 launcher hardening. Proves:
 //   * normalizeLauncherDir refuses cmd metacharacters / control chars / relative / traversal / junk;
-//   * resolveVscodeExe / resolveTerminalExe resolve a REAL executable deterministically from main-owned
+//   * the helper resolver selects executables deterministically from main-owned
 //     env (never a shell, never cmd.exe / .cmd / PowerShell);
 //   * the production VS Code spec is Code.exe with the path as a single discrete argv element;
 //   * shell:false passes a metacharacter path to a child LITERALLY (the general property); and
@@ -10,15 +10,13 @@
 //     from a metacharacter path — i.e. exactly the class the fix removes by dropping cmd.exe.
 
 const { spawnSync } = require('child_process');
+const { createHelperPrograms } = require('./helper-programs');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {
   IS_WIN,
   normalizeLauncherDir,
-  resolveVscodeExe,
-  resolveFirefoxExe,
-  resolveTerminalExe,
   openVscodeSpec,
   openTerminalSpec,
 } = require('./launchers');
@@ -51,64 +49,41 @@ for (const ch of ['%', '&', '|', '^', '<', '>', '(', ')', '"', "'", '`']) {
   assert(normalizeLauncherDir(null).reason === 'not-a-string', 'refuses null');
   assert(normalizeLauncherDir(42).reason === 'not-a-string', 'refuses a non-string type');
   assert(normalizeLauncherDir('relative\\path').reason === 'not-absolute', 'refuses a relative path');
-  assert(normalizeLauncherDir('C:\\Workspace\\..\\Windows').reason === 'traversal', 'refuses a `..` traversal segment');
+  assert(normalizeLauncherDir(IS_WIN ? 'X:\\Repo\\..\\Other' : '/repo/../other').reason === 'traversal', 'refuses a `..` traversal segment');
   assert(normalizeLauncherDir('C:\\' + 'x'.repeat(5000)).reason === 'too-long', 'refuses an over-length path');
 }
 
-// --- resolveFirefoxExe (S55): absolute roots only, fixed order, visible refusals ---------------
+// --- Windows launcher installs are resolved in order and fail visibly ----------------------
 {
-  const pf = path.resolve('/pf'), pf86 = path.resolve('/pf86'), local = path.resolve('/local');
-  const exe = (root) => path.join(root, 'Mozilla Firefox', 'firefox.exe');
+  const pf = 'X:\\Programs', pf86 = 'X:\\Programs86', local = 'Y:\\Local';
   const env = { ProgramFiles: pf, 'ProgramFiles(x86)': pf86, LOCALAPPDATA: local };
-  let r = resolveFirefoxExe({ env, isFile: () => true });
-  assert(r.ok && r.exe === exe(pf), 'resolves Program Files first');
-  r = resolveFirefoxExe({ env, isFile: (p) => p === exe(pf86) || p === exe(local) });
-  assert(r.ok && r.exe === exe(pf86), 'then Program Files (x86)');
-  r = resolveFirefoxExe({ env, isFile: (p) => p === exe(local) });
-  assert(r.ok && r.exe === exe(local), 'then LOCALAPPDATA');
+  const firefox = (root) => path.win32.join(root, 'Mozilla Firefox', 'firefox.exe');
+  const userCode = path.win32.join(local, 'Programs', 'Microsoft VS Code', 'Code.exe');
+  const systemCode = path.win32.join(pf, 'Microsoft VS Code', 'Code.exe');
+  const wt = path.win32.join(local, 'Microsoft', 'WindowsApps', 'wt.exe');
+  const resolve = (name, isExecutable, roots = env) =>
+    createHelperPrograms({ platform: 'win32', env: roots, isExecutable }).resolve(name);
+
+  assert(resolve('firefox', () => true).exe === firefox(pf), 'Firefox resolves Program Files first');
+  assert(resolve('firefox', (p) => p === firefox(pf86) || p === firefox(local)).exe === firefox(pf86),
+    'Firefox tries Program Files (x86) before LOCALAPPDATA');
+  assert(resolve('firefox', (p) => p === firefox(local)).exe === firefox(local), 'Firefox accepts a LOCALAPPDATA install');
   const seen = [];
-  r = resolveFirefoxExe({ env: { ProgramFiles: 'relative', 'ProgramFiles(x86)': '', LOCALAPPDATA: local },
-    isFile: (p) => { seen.push(p); return true; } });
-  assert(r.ok && r.exe === exe(local) && seen.length === 1, 'skips a relative or empty root without probing it');
-  r = resolveFirefoxExe({ env, isFile: () => { throw new Error('EACCES'); } });
-  assert(r.ok === false && r.reason === 'firefox-executable-unreadable', 'a throwing isFile refuses (firefox-executable-unreadable)');
-  r = resolveFirefoxExe({ env, isFile: () => false });
-  assert(r.ok === false && r.reason === 'firefox-not-found', 'refuses (firefox-not-found) when no firefox.exe exists');
-  r = resolveFirefoxExe({ env: {}, isFile: () => true });
-  assert(r.ok === false && r.reason === 'firefox-not-found', 'refuses with no roots set');
-}
+  const localFirefox = resolve('firefox', (p) => { seen.push(p); return true; },
+    { ProgramFiles: 'relative', 'ProgramFiles(x86)': '', LOCALAPPDATA: local });
+  assert(localFirefox.exe === firefox(local) && seen.length === 1, 'Firefox skips invalid install roots without probing');
+  assert(resolve('firefox', () => { throw new Error('EACCES'); }).reason === 'firefox-executable-unreadable',
+    'Firefox reports an unreadable installation');
+  assert(resolve('firefox', () => false).reason === 'firefox-not-found', 'Firefox reports a missing installation');
+  assert(resolve('firefox', () => true, {}).reason === 'firefox-not-found', 'Firefox refuses with no install roots');
 
-// --- resolveVscodeExe: deterministic, first existing candidate, main-owned env only -------------
-{
-  const env = { LOCALAPPDATA: 'C:\\U\\AppData\\Local', ProgramFiles: 'C:\\Program Files' };
-  const userExe = 'C:\\U\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe';
-  const sysExe = 'C:\\Program Files\\Microsoft VS Code\\Code.exe';
-  // user install present -> chosen first
-  let r = resolveVscodeExe({ env, isWin: true, exists: (p) => p === userExe || p === sysExe });
-  assert(r.ok && r.exe === userExe, 'resolves the user-install Code.exe first');
-  // only system install present -> falls through to it
-  r = resolveVscodeExe({ env, isWin: true, exists: (p) => p === sysExe });
-  assert(r.ok && r.exe === sysExe, 'falls through to the system-install Code.exe');
-  // none present -> visible refusal, never a bare `code`/shell fallback on Windows
-  r = resolveVscodeExe({ env, isWin: true, exists: () => false });
-  assert(r.ok === false && r.reason === 'vscode-not-found', 'refuses (vscode-not-found) when no Code.exe exists');
-  // the resolved exe is Code.exe — never cmd.exe / a .cmd / powershell
-  r = resolveVscodeExe({ env, isWin: true, exists: (p) => p === userExe });
-  assert(/\\Code\.exe$/i.test(r.exe) && !/cmd\.exe$/i.test(r.exe) && !/\.cmd$/i.test(r.exe) && !/powershell/i.test(r.exe),
-    'the resolved VS Code exe is Code.exe — not cmd.exe, a .cmd, or PowerShell');
-  // off-Windows: spawn `code` directly (no cmd.exe possible)
-  r = resolveVscodeExe({ env: {}, isWin: false, exists: () => false });
-  assert(r.ok && r.exe === 'code', 'off-Windows resolves the direct `code` executable');
-}
-
-// --- resolveTerminalExe: WindowsApps alias when present, else bare `wt`; never a shell ----------
-{
-  const env = { LOCALAPPDATA: 'C:\\U\\AppData\\Local' };
-  const alias = 'C:\\U\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe';
-  assert(resolveTerminalExe({ env, isWin: true, exists: (p) => p === alias }) === alias,
-    'resolves the wt.exe App Execution Alias path when it exists');
-  const bare = resolveTerminalExe({ env, isWin: true, exists: () => false });
-  assert(bare === 'wt' && !/cmd\.exe$/i.test(bare), 'falls back to the bare `wt` alias name (never cmd.exe)');
+  assert(resolve('code', (p) => p === userCode || p === systemCode).exe === userCode, 'Code resolves the per-user install first');
+  assert(resolve('code', (p) => p === systemCode).exe === systemCode, 'Code then tries the system install');
+  assert(resolve('code', () => false).reason === 'code-not-found', 'Code reports a missing installation');
+  assert(resolve('wt', (p) => p === wt).exe === wt, 'Terminal resolves its absolute App Execution Alias');
+  assert(resolve('wt', () => false).reason === 'wt-not-found', 'Terminal reports a missing installation');
+  const unix = createHelperPrograms({ platform: 'linux', isExecutable: (p) => p === '/usr/bin/code' });
+  assert(unix.resolve('code').exe === '/usr/bin/code', 'off Windows Code resolves to an absolute executable');
 }
 
 // --- the specs: path is a single discrete argv element; cmd is the resolved exe -----------------

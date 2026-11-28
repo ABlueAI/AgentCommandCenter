@@ -125,6 +125,7 @@ function makeRig(execFileStub) {
   // `createPublishers`, so the pane-status view and setup-state channels are genuinely exercised;
   // `main-error` is a different channel and is not touched here at all.
   const resolver = () => versionMod.createClaudeVersionResolver({
+    resolvePowerShell: () => process.execPath,
     execFile: execFileStub,
     env: { PATH: 'C:\\Windows\\System32', PATHEXT: '.EXE;.CMD' },
     commandName: 'claude',

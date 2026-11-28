@@ -312,15 +312,7 @@ function createVersionGate(deps) {
 // § E.2 both specify the corrected behaviour, and the corrected prototype module implemented it. That
 // behaviour is carried forward here rather than reinvented.
 //
-// WHY THE BARE NAME `powershell.exe` IS CORRECT HERE, AND ONLY HERE.
-//   The stale-lock liveness resolver uses a BOUNDED ABSOLUTE path under the system directory
-//   (pane-status-lock.js), because it must not depend on the user's environment at all.
-//   This resolver is the exact opposite requirement: it must depend on precisely the user's
-//   environment, because that environment is what decides which `claude` the pane runs. Resolving an
-//   absolute PowerShell here would break the binding the whole module exists to establish.
-//
 // `-NoProfile` IS DELIBERATELY ABSENT. The pane loads the profile; so must the probe.
-const PS_EXE = 'powershell.exe';
 // The pane's flags minus -NoExit (we want the probe to terminate). app/main.js builds
 // ['-NoLogo','-ExecutionPolicy','Bypass','-NoExit'] for the PTY; a test pins this correspondence.
 const PS_FLAGS = Object.freeze(['-NoLogo', '-ExecutionPolicy', 'Bypass', '-Command']);
@@ -422,6 +414,7 @@ const RESOLUTION_METHOD = 'powershell-get-command';
 
 /**
  * deps:
+ *   resolvePowerShell() -> absolute system PowerShell executable, or throws
  *   execFile(file, args, opts, cb) -> node child_process.execFile. INJECTED — this module still never
  *                                     imports child_process, so no provider-event path can reach one.
  *   env          -> the environment the PANE will be launched with (PATH/PATHEXT must match)
@@ -437,10 +430,13 @@ function createClaudeVersionResolver(deps) {
   const d = deps || {};
   const execFile = d.execFile;
   const env = d.env || {};
+  const resolvePowerShell = d.resolvePowerShell;
   const commandName = d.commandName || 'claude';
   const log = typeof d.log === 'function' ? d.log : () => {};
   const timeoutMs = typeof d.timeoutMs === 'number' ? d.timeoutMs : PROBE_TIMEOUT_MS;
-  if (typeof execFile !== 'function') throw new Error('pane-status-version: execFile is required');
+  if (typeof execFile !== 'function' || typeof resolvePowerShell !== 'function') {
+    throw new Error('pane-status-version: execFile and resolvePowerShell are required');
+  }
 
   /**
    * Run the probe once. NEVER REJECTS: a failure is a resolved refusal, because a rejected promise on
@@ -473,7 +469,7 @@ function createClaudeVersionResolver(deps) {
       };
       try {
         execFile(
-          PS_EXE,
+          resolvePowerShell(),
           PS_FLAGS.concat([script]),
           { env, timeout: timeoutMs, maxBuffer: MAX_PROBE_OUTPUT_BYTES, windowsHide: true },
           (error, stdout) => {
@@ -500,7 +496,6 @@ const api = {
   isVersionVerified,
   isVersionSupported,
   createVersionGate,
-  PS_EXE,
   PS_FLAGS,
   PROBE_TIMEOUT_MS,
   SOURCE_TAG,

@@ -24,7 +24,8 @@
 const fs = require('fs');
 const path = require('path');
 const versionMod = require('./pane-status-version');
-const lockMod = require('./pane-status-lock');
+const { createHelperPrograms } = require('../helper-programs');
+const SHELL = 'X:\\System\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -65,8 +66,8 @@ process.stdout.write('\n3. the version probe mirrors the PANE launch, profile an
   // THE FLAG THAT MUST NOT BE THERE.
   assert(probe.indexOf('-NoProfile') === -1,
     '-NoProfile is ABSENT: the pane loads the user profile, so a probe that skipped it could resolve a different claude');
-  assert(versionMod.PS_EXE === 'powershell.exe',
-    'and the interpreter is the same bare name the pane spawns, so PATH resolution matches too');
+  assert(/resolvePowerShell:\s*\(\) => helpers\.path\('powershell'\)/.test(MAIN_CODE),
+    'the main process resolves the probe interpreter through the shared helper boundary');
 
   const script = versionMod.buildProbeScript('claude');
   assert(/Get-Command claude/.test(script), 'the script resolves the bare command with Get-Command');
@@ -97,6 +98,7 @@ process.stdout.write('\n   installation A on Electron PATH vs installation B in 
 
   const calls = [];
   const resolver = versionMod.createClaudeVersionResolver({
+    resolvePowerShell: () => SHELL,
     execFile: (file, args, opts, cb) => {
       calls.push({ file, args, opts });
       cb(null, `PANE_STATUS_SOURCE=${B}\nPANE_STATUS_VERSION=2.1.228 (Claude Code)\n`, '');
@@ -114,7 +116,7 @@ process.stdout.write('\n   installation A on Electron PATH vs installation B in 
     eq(res.version, '2.1.228', 'the version comes from B');
 
     eq(calls.length, 1, 'exactly one child process is spawned for the whole probe');
-    eq(calls[0].file, 'powershell.exe', 'it is PowerShell, not claude directly');
+    eq(calls[0].file, SHELL, 'it starts the resolved absolute system PowerShell');
     assert(calls[0].args.indexOf('-NoProfile') === -1, 'launched WITHOUT -NoProfile');
     assert(calls[0].args[0] === '-NoLogo' && calls[0].args[2] === 'Bypass', 'with the pane flags');
     assert(typeof calls[0].opts.timeout === 'number' && calls[0].opts.timeout > 0, 'and a bounded timeout');
@@ -158,6 +160,7 @@ async function failClosed() {
     const emit = entry[1];
     const reason = entry[entry.length - 1];
     const resolver = versionMod.createClaudeVersionResolver({
+      resolvePowerShell: () => SHELL,
       execFile: (file, args, opts, cb) => emit(cb), env: {}, commandName: 'claude', log: () => {},
     });
     const r = await resolver.discover();
@@ -176,6 +179,7 @@ async function failClosed() {
   // A resolver that THROWS synchronously must still resolve, never reject: a rejected promise on a
   // background discovery would be an invisible failure.
   const thrower = versionMod.createClaudeVersionResolver({
+    resolvePowerShell: () => SHELL,
     execFile: () => { throw new Error('spawn exploded'); }, env: {}, commandName: 'claude', log: () => {},
   });
   const t = await thrower.discover();
@@ -193,57 +197,26 @@ async function failClosed() {
 // -------------------------------------------------------------------------------------------------
 function liveness() {
   process.stdout.write('\n7. the liveness resolver is a BOUNDED ABSOLUTE path, never a PATH lookup\n');
-  const REAL = process.env.SystemRoot || 'C:\\Windows';
-  const expected = path.join(REAL, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-
-  const ok = lockMod.resolveWindowsPowerShellPath({ SystemRoot: REAL }, () => true);
-  assert(ok.ok === true, 'it resolves under the system directory');
-  eq(ok.path, expected, 'to the fixed absolute Windows PowerShell path');
-  assert(path.isAbsolute(ok.path), 'which is absolute');
-
-  // POISON EVERYTHING the old code read, or could have read.
-  const poisoned = {
-    SystemRoot: REAL,
-    PATH: 'C:\\evil;C:\\also-evil',
-    Path: 'C:\\evil',
-    PATHEXT: '.EVIL',
-    ComSpec: 'C:\\evil\\cmd.exe',
+  const resolve = (env, isExecutable) =>
+    createHelperPrograms({ platform: 'win32', env, isExecutable }).resolve('powershell');
+  const env = {
+    SystemRoot: 'X:\\System',
+    PATH: 'Y:\\Elsewhere',
+    PATHEXT: '.CMD',
+    ComSpec: 'Y:\\Elsewhere\\cmd.exe',
   };
-  const still = lockMod.resolveWindowsPowerShellPath(poisoned, () => true);
-  eq(still.path, expected, 'a poisoned PATH, Path, PATHEXT and ComSpec change NOTHING');
-
-  // And prove structurally that it cannot be reading them.
-  const lockSrc = fs.readFileSync(path.join(__dirname, 'pane-status-lock.js'), 'utf8');
-  const resolverSrc = lockSrc.slice(lockSrc.indexOf('function resolveWindowsPowerShellPath'),
-    lockSrc.indexOf('function createPaneStatusLock'));
-  assert(resolverSrc.length > 0, 'the resolver source was located');
-  for (const name of ['ComSpec', 'PATHEXT']) {
-    assert(resolverSrc.indexOf('e.' + name) === -1 && resolverSrc.indexOf('env.' + name) === -1,
-      `the resolver body never reads ${name}`);
+  eq(resolve(env, () => true).exe, SHELL, 'uses the absolute system PowerShell path');
+  eq(resolve(env, () => false).reason, 'powershell-not-found', 'missing PowerShell is refused');
+  eq(resolve({ SystemRoot: 'relative' }, () => true).reason, 'powershell-not-found', 'invalid system roots are refused');
+  eq(resolve(env, () => { throw new Error('EACCES'); }).reason, 'powershell-executable-unreadable',
+    'an unreadable executable is a visible refusal');
+  const livenessCode = MAIN_CODE.split('resolveProcessStartTime:')[1].split('publishView:')[0];
+  assert(/helpers\.execFile\(\s*helpers\.path\('powershell'\)/.test(livenessCode),
+    'main executes the liveness probe with the shared absolute path');
+  if (process.platform === 'win32') {
+    assert(require('../helper-programs').resolve('powershell').ok,
+      'the system PowerShell exists on this Windows machine');
   }
-  assert(!/\be\.PATH\b|\benv\.PATH\b|\be\.Path\b/.test(resolverSrc), 'and never reads PATH');
-
-  // The no-op ternary that made the old selection meaningless must be gone from main.js.
-  assert(!/ComSpec\s*\?\s*'powershell\.exe'\s*:\s*'powershell\.exe'/.test(MAIN_CODE),
-    'main.js no longer contains the identical-branch ternary that made the choice meaningless');
-  assert(/resolveWindowsPowerShellPath\(process\.env\)/.test(MAIN_CODE),
-    'and main.js resolves the liveness executable through the bounded resolver');
-
-  // MISSING or UNUSABLE -> refusal, which the lock turns into a conservative liveness-unknown.
-  eq(lockMod.resolveWindowsPowerShellPath({ SystemRoot: REAL }, () => false).ok, false,
-    'an executable that is not there is a REFUSAL');
-  eq(lockMod.resolveWindowsPowerShellPath({ SystemRoot: REAL }, () => false).reason,
-    lockMod.LOCK_REFUSAL.POWERSHELL_UNRESOLVED, 'with the liveness-resolver-unavailable reason');
-  eq(lockMod.resolveWindowsPowerShellPath({ SystemRoot: 'not-absolute' }, () => true).ok, false,
-    'a relative SystemRoot is refused rather than joined');
-  eq(lockMod.resolveWindowsPowerShellPath({}, () => false).ok, false,
-    'and with nothing in the environment at all it still refuses rather than falling back to a bare name');
-  eq(lockMod.resolveWindowsPowerShellPath({ SystemRoot: REAL }, () => { throw new Error('EACCES'); }).ok, false,
-    'an existence check that throws is a refusal, not an exception');
-
-  // On this machine, the real thing really is there.
-  assert(lockMod.resolveWindowsPowerShellPath(process.env).ok === true,
-    'and on this machine the bounded absolute executable genuinely exists');
 
   process.stdout.write(`\npane-status-resolution: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
