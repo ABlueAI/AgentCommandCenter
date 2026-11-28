@@ -177,9 +177,12 @@ function makeController(overrides) {
 
     const onKill = handlerBody(MAIN_CODE, "ipcMain.on('pty-kill'");
     assert(onKill.length > 0, 'the pty-kill handler was located');
-    assert(/videoScoutRunIds\.remove\(id\)/.test(onKill), 'EXPLICIT close still removes the run-ID mapping');
-    assert(/paneStatus\.releasePane\(id\)/.test(onKill), 'and releases the pane rather than marking it exited');
-    assert(!/paneStatus\.notePaneExit/.test(onKill), 'the two paths stay distinct');
+    const retire = handlerBody(MAIN_CODE, 'function retirePtyPane(');
+    assert(onKill.includes('retirePtyPane(id, sessionMemoryMod.STOP_REASON.CLOSED)'),
+      'explicit close goes through pane retirement');
+    assert(/videoScoutRunIds\.remove\(id\)/.test(retire), 'EXPLICIT close still removes the run-ID mapping');
+    assert(/paneStatus\.releasePane\(id\)/.test(retire), 'and releases the pane rather than marking it exited');
+    assert(!/paneStatus\.notePaneExit/.test(retire), 'the two paths stay distinct');
 
     const onAllClosed = handlerBody(MAIN_CODE, "app.on('window-all-closed'");
     assert(onAllClosed.length > 0, 'the window-all-closed handler was located');

@@ -425,11 +425,11 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     const productionOpen = appJs.slice(openStart, openEnd);
     const ptyStartAt = productionOpen.indexOf('const startResult = cc.ptyStart(');
     const settlementAt = productionOpen.indexOf('Promise.resolve(startResult).then(');
-    const successGate = "if (!res || res.ok !== true) { onStartFailed((res && res.error) || 'refused'); return; }";
+    const successGate = "if (res?.ok !== true || res.id !== id) { onStartFailed('unexpected-response', true); return; }";
     const successGateAt = productionOpen.indexOf(successGate, settlementAt);
     const refreshLine = 'if (admissionView) await admissionView.refresh();';
     const refreshAt = productionOpen.indexOf(refreshLine, settlementAt);
-    const rejectAt = productionOpen.indexOf("() => onStartFailed('ipc-rejected')", settlementAt);
+    const rejectAt = productionOpen.indexOf("() => onStartFailed('ipc-rejected', true)", settlementAt);
     assert(ptyStartAt >= 0, 'the proof starts at the real cc.ptyStart call');
     assert(settlementAt > ptyStartAt, 'settlement remains downstream of the real ptyStart promise');
     assert(successGateAt > settlementAt, 'a refused start returns through the existing failure cleanup');

@@ -323,8 +323,7 @@ process.stdout.write('\na PTY that refuses to start takes its panel and pane wit
   assert(JSON.stringify(f.after.panels) === JSON.stringify([]), 'no Dockview panel survives — no ghost');
   assert(JSON.stringify(f.after.owned) === JSON.stringify([]), 'no ownership survives');
   assert(f.after.ghostHosts === 0, 'no empty panel host survives');
-  assert(JSON.stringify(f.ptyKill) === JSON.stringify(['pty1']),
-    'exactly one kill is issued — the belt-and-braces guarantee that no process outlives a failed start');
+  assert(f.ptyKill.length === 0, 'the start refusal already retired its reservation in main');
 }
 
 // ---------------------------------------------------------------------------

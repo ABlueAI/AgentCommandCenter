@@ -141,7 +141,9 @@ function makeKiller(over) {
   const src = require('fs').readFileSync(path.join(__dirname, 'main.js'), 'utf8');
   const kill = src.slice(src.indexOf("ipcMain.on('pty-kill'"));
   const killBody = kill.slice(0, kill.indexOf('\n});'));
-  assert(/processTree\.killTree\(p\.pid, \(\) => \{ try \{ p\.kill\(\); \} catch \{\} \}\)/.test(killBody),
+  const retire = src.slice(src.indexOf('function retirePtyPane('), src.indexOf('function retireRendererPanes('));
+  assert(killBody.includes('retirePtyPane(id, sessionMemoryMod.STOP_REASON.CLOSED)')
+    && /processTree\.killTree\(p\.pid, \(\) => \{\s+try \{ p\.kill\(\); \}/.test(retire),
     'pty-kill kills the tree and calls pty.kill() only from the callback');
   const wac = src.slice(src.indexOf("app.on('window-all-closed'"));
   const wacBody = wac.slice(0, wac.indexOf('\n});'));

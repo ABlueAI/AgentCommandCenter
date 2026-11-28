@@ -376,7 +376,8 @@ Module._load = function (request) {
     fs.writeFileSync(path.join(agents, 'page-reader.md'),
       fs.readFileSync(ROLE_SRC, 'utf8').replace('__CC_HOOK__', path.join(hooks, 'fence-write.js').replace(/\\/g, '/')));
     const ptyStart = record.handled.get('pty-start');
-    const started = await ptyStart(good, { id: 'page-1', role: 'page-reader', cli: 'claude', cwd: r.dir, cols: 80, rows: 24 });
+    const { id } = await record.handled.get('pty-reserve')(good);
+    const started = await ptyStart(good, { role: 'page-reader', cli: 'claude', cwd: r.dir, cols: 80, rows: 24 }, id);
     if (started.ok !== true) process.stdout.write('  (pty-start refused: ' + started.error + ')\n');
     assert(started.ok === true, 'pty-start launches with the temporary page-reader copy despite an installed agent above it');
     const spawn = record.spawnArgs[record.spawnArgs.length - 1];

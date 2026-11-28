@@ -38,7 +38,7 @@ function createPtyStartAuthority(deps) {
   // environment value, or any other renderer-supplied payload.
   function refuse(stage, reason) {
     logRefusal('pty-start refused [' + stage + ']: ' + reason);
-    return { ok: false, reason: reason };
+    return { ok: false, reason: reason, stage: stage };
   }
 
   function assess(event, opts) {
