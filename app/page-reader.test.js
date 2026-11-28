@@ -277,6 +277,15 @@ section('5. Fence hook gates (the real hook)');
 
 section('6. End to end through the real main.js');
 // Model a Windows temp directory under a home with a page-reader agent already installed.
+{
+  const { throws } = require('node:assert/strict');
+  const pageReader = require('./page-reader');
+  throws(() => pageReader.buildMcpConfig(), /cliPath must be absolute/);
+  throws(() => pageReader.buildMcpConfig({ cliPath: process.execPath, profileDir: 'relative-profile' }),
+    /profileDir must be absolute/);
+  throws(() => pageReader.pageReaderCliArgs('relative-config.json'), /mcpConfigPath must be absolute/);
+}
+
 const INSTALLED_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-page-reader-main-'));
 process.once('exit', () => fs.rmSync(INSTALLED_HOME, { recursive: true, force: true }));
 const installedAgents = path.join(INSTALLED_HOME, '.claude', 'agents');

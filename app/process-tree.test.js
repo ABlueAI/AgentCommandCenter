@@ -54,6 +54,26 @@ function makeKiller(over, onLog = () => {}) {
   assert(threw, 'constructor throws when execFileSync is missing');
 }
 
+{
+  const { throws } = require('node:assert/strict');
+  throws(() => createProcessTreeKiller({ platform: null }), /platform must be a string/);
+  const { killer, calls, logs } = makeKiller({ env: {} });
+  let done = 0;
+  killer.killTree(4321, () => { done += 1; });
+  killer.killTreesSync([4321]);
+  assert(done === 1 && calls.length === 0, 'missing taskkill path still completes pane cleanup without launching a process');
+  assert(logs.length === 2 && logs.every((line) => line.includes('taskkill-path-unresolved')),
+    'both missing-path cases explain the limited cleanup');
+}
+{
+  const { killer, logs } = makeKiller({ execFileSync: () => {
+    throw Object.assign(new Error('fixture process exited'), { status: 128, code: 'FIXTURE' });
+  } });
+  killer.killTreesSync([4321]);
+  assert(logs.length === 1 && logs[0] === '[process-tree] shutdown: already exited (1 pane(s))',
+    'shutdown treats numeric exit status 128 as already exited');
+}
+
 // --- pane close: taskkill first, then pty.kill() -------------------------------------------------
 {
   const { killer, calls } = makeKiller();

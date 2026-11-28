@@ -47,6 +47,51 @@ function makeController(over) {
 }
 
 (async () => {
+  {
+    const { deepEqual, throws } = require('node:assert/strict');
+    throws(() => ipcMod.registerPaneStatusIpc(), /ipcMain is required/);
+    throws(() => ipcMod.registerPaneStatusIpc({ ipcMain: makeIpcMain() }), /trustedSenderGate is required/);
+    throws(() => ipcMod.registerPaneStatusIpc({ ipcMain: makeIpcMain(), trustedSenderGate: makeGate() }),
+      /controller is required/);
+
+    const ipcMain = makeIpcMain();
+    const { controller } = makeController({
+      install: async () => ({ ok: false, reason: 'setup-refused', detail: 'unsupported-version' }),
+      remove: async () => ({ ok: false, reason: 'remove-refused', detail: 'fixture detail with spaces', retained: true }),
+      clearStaleLock: async () => ({ ok: false, reason: 'lock-held' }),
+    });
+    ipcMod.registerPaneStatusIpc({
+      ipcMain, trustedSenderGate: makeGate(), controller, confirmNatively: async () => true,
+    });
+    const installed = await ipcMain.invoke(ipcMod.CHANNELS.INSTALL, TRUSTED);
+    deepEqual([installed.ok, installed.reason, installed.detail], [false, 'setup-refused', 'unsupported-version']);
+    const removed = await ipcMain.invoke(ipcMod.CHANNELS.REMOVE, TRUSTED);
+    deepEqual([removed.ok, removed.reason, removed.detail, removed.retained, removed.disposition],
+      [false, 'remove-refused', null, true, null]);
+    const lock = await ipcMain.invoke(ipcMod.CHANNELS.CLEAR_STALE_LOCK, TRUSTED);
+    deepEqual([lock.ok, lock.reason], [false, 'lock-held']);
+  }
+
+  {
+    for (const getWindow of [
+      undefined,
+      () => ({ isDestroyed: () => true, webContents: { send() { throw new Error('must not send'); } } }),
+      () => ({}),
+      () => ({ webContents: { send() { throw new Error('fixture send failure'); } } }),
+    ]) {
+      const { publishView, publishSetupState } = ipcMod.createPublishers(getWindow);
+      assert(publishView(null) === false && publishSetupState(null) === false,
+        'unavailable publish endpoints return failure for both channels');
+    }
+    const messages = [];
+    const { publishView } = ipcMod.createPublishers(() => ({
+      webContents: { send: (channel, view) => messages.push({ channel, view }) },
+    }));
+    assert(publishView({ paneId: 'pty1', state: 'working', fixtureExtra: 'omit me' }) === true &&
+      messages[0].channel === ipcMod.CHANNELS.VIEW && !('fixtureExtra' in messages[0].view),
+    'status publishers project the view before a successful send');
+  }
+
   // ---------------------------------------------------------------- exactly four invokes
   {
     const ipcMain = makeIpcMain();

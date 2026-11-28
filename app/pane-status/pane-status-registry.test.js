@@ -157,5 +157,28 @@ assert(registryMod.createPaneStatusRegistry.length <= 1, 'the factory takes a si
   assert(r.viewFor('pty1').reason === 'version-mismatch', 'an unsupported version shows version-mismatch');
 }
 
+{
+  const malformed = makeRegistry({ randomToken: () => 'fixture-invalid' });
+  const result = malformed.enroll('pty1');
+  assert(!result.ok && result.reason === 'bad-token-generated' && malformed.size() === 0,
+    'a malformed generated token cannot enroll a pane');
+
+  const r = makeRegistry();
+  r.setOverrideReason(null);
+  const first = r.enroll('pty1');
+  const second = r.enroll('pty1');
+  assert(second.ok && second.token !== first.token &&
+    r.applyMessage({ e: 'Stop', t: first.token }).reason === protocol.REFUSE.UNKNOWN_TOKEN,
+  're-enrollment instantly invalidates the earlier token');
+  const malformedEvent = r.applyMessage({ token: second.token, event: 'FixtureEvent' });
+  assert(!malformedEvent.ok && malformedEvent.reason === protocol.REFUSE.BAD_EVENT,
+    'the registry independently refuses an unsupported event from its caller');
+  r.enroll('pty2');
+  assert(r.views().length === 2 && r.enrolledPaneIds().join(',') === 'pty1,pty2',
+    'both enrolled panes appear in the snapshots');
+  r.revokeAll('fixture-cleanup');
+  assert(r.size() === 0 && !r.revoke('pty2'), 'revocation clears every pane and is safe to repeat');
+}
+
 process.stdout.write(`\npane-status-registry: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

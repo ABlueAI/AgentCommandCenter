@@ -44,6 +44,27 @@ process.stdout.write('\nsetup line\n');
   eq(parsed.statusLine.command, 'node "C:/Mako/AgentCommandCenter/app/usage/usage-statusline.js"', 'pastes as a valid settings.json member');
 }
 
+{
+  const { throws } = require('node:assert/strict');
+  const deps = {
+    assessSender: () => ({ ok: true }),
+    statFile: () => ({ size: 0 }),
+    readFile: () => '',
+    filePath: FILE,
+    scriptPath: SCRIPT,
+    offerSetup: false,
+  };
+  throws(() => createUsageIpc({ ...deps, filePath: '' }), /filePath is required/);
+  throws(() => createUsageIpc({ ...deps, scriptPath: null }), /scriptPath is required/);
+}
+
+for (const stats of [undefined, { size: '12' }]) {
+  const { ipc, calls, logs } = make({ stat: () => stats });
+  eq(ipc.handleRead({}).reason, 'usage-file-too-large', 'invalid stat result refuses before reading');
+  eq(calls.read, 0, 'invalid stat result did not trigger a read');
+  eq(logs[0], 'Usage panel: usage-file-too-large', 'invalid stat result is visible');
+}
+
 process.stdout.write('\nhandleRead\n');
 {
   const { ipc, logs, calls } = make({ trusted: false });

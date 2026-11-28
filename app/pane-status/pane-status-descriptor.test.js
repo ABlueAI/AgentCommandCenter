@@ -41,6 +41,29 @@ function base(over) {
   }, over || {});
 }
 
+{
+  const dir = freshDir();
+  const file = descriptorMod.descriptorPath(dir);
+  const cases = [
+    [null, descriptorMod.DESCRIPTOR_REFUSAL.MALFORMED],
+    [[], descriptorMod.DESCRIPTOR_REFUSAL.MALFORMED],
+    [{ schemaVersion: '1' }, descriptorMod.DESCRIPTOR_REFUSAL.UNKNOWN_SCHEMA],
+  ];
+  const invalidState = { ...descriptorMod.buildDescriptor(base()), transactionState: 'UNKNOWN_STATE' };
+  invalidState.integrity = descriptorMod.integrityHashOf(invalidState);
+  cases.push([invalidState, descriptorMod.DESCRIPTOR_REFUSAL.BAD_STATE]);
+  for (const [value, reason] of cases) {
+    const text = JSON.stringify(value);
+    fs.writeFileSync(file, text);
+    assert(descriptorMod.read(dir).reason === reason && fs.readFileSync(file, 'utf8') === text,
+      `descriptor rejects ${reason} without modifying the file`);
+  }
+  fs.unlinkSync(file);
+  fs.mkdirSync(file);
+  assert(descriptorMod.remove(dir).reason === 'descriptor-unlink-failed' && fs.statSync(file).isDirectory(),
+    'a removal failure is returned and the unexpected directory remains');
+}
+
 // ---------------------------------------------------------------- atomic write
 {
   const dir = freshDir();

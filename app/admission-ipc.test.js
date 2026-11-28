@@ -423,6 +423,51 @@ function testSourceTripwires() {
 // ---- run -------------------------------------------------------------------------------------------------
 
 (async () => {
+  {
+    const { deepEqual, throws } = require('node:assert/strict');
+    throws(() => createAdmissionIpc(), /budget is required/);
+    const budget = fakeBudget();
+    const ipc = createAdmissionIpc({ budget });
+    throws(() => ipc.register({}), /ipcMain with handle/);
+    const handlers = new Map();
+    ipc.register({ handle: (name, handler) => handlers.set(name, handler) });
+    deepEqual(await handlers.get(CHANNEL_SUBMIT)({}, { paneId: 'pty1', prompt: 'Fixture prompt' }),
+      { ok: false, reason: IPC_REASON.UNTRUSTED });
+    deepEqual(await handlers.get(CHANNEL_STATE)({}), { ok: false, reason: IPC_REASON.UNTRUSTED });
+    deepEqual(budget.calls, []);
+    const trusted = makeIpc({ budget });
+    trusted.ipc.register({ handle: (name, handler) => handlers.set(name, handler) });
+    assert((await handlers.get(CHANNEL_SUBMIT)({}, { paneId: 'pty1', prompt: 'Fixture prompt' })).ok &&
+      budget.calls.length === 1, 'registered submit forwards the validated request once');
+    assert((await handlers.get(CHANNEL_STATE)({})).state.admitted === 1,
+      'registered state handler returns the budget projection');
+  }
+
+  {
+    const vm = require('node:vm');
+    const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
+    const bridges = new Map();
+    const calls = [];
+    const electron = {
+      contextBridge: { exposeInMainWorld: (name, api) => bridges.set(name, api) },
+      ipcRenderer: { invoke: (...args) => calls.push(args) },
+    };
+    for (const argv of [[], ['--blue-helm-admission-budget']]) {
+      bridges.clear();
+      vm.runInNewContext(preload, { require: () => electron, process: { argv } }, { filename: 'preload.js' });
+      assert(bridges.has('ccAdmission') === (argv.length > 0),
+        'executing the preload exposes the admission bridge only for a controlled run');
+    }
+    const bridge = bridges.get('ccAdmission');
+    const request = { paneId: 'pty1', prompt: 'Fixture prompt' };
+    bridge.submitPrompt(request);
+    bridge.getState();
+    assert(Object.isFrozen(bridge) && calls.length === 2 &&
+      calls[0][0] === CHANNEL_SUBMIT && calls[0][1] === request &&
+      calls[1][0] === CHANNEL_STATE && calls[1].length === 1,
+    'the real preload forwards only the submit payload and a zero-argument state check');
+  }
+
   await testDirectInputBlocked();
   await testNoBypass();
   await testUncontrolledPanesUnaffected();

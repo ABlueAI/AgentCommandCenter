@@ -87,6 +87,27 @@ const PANE_REQ = (q) => ({ source: 'pane', paneId: 'pty7', question: q === undef
 }
 
 (async () => {
+  {
+    const { ipc, counters, ev } = makeIpc();
+    const result = await ipc.handleAsk(ev, { source: 'pane', question: 'What happened?' });
+    assert(result.ok === false && result.error === 'bad-request' &&
+      counters.reads.length === 0 && counters.children.length === 0 &&
+      counters.logs[0] === '[followup] denied: bad-request',
+    'the IPC handler visibly refuses a malformed request before I/O');
+  }
+
+  {
+    const { ipc, counters, ev } = makeIpc({
+      runFollowupChild: async () => ({ ok: true, answer: 'Fixture answer' }),
+    });
+    const result = await ipc.handleAsk(ev, PANE_REQ());
+    assert(result.ok && result.attempts === 1 &&
+      Object.values(result.usage).every((value) => value === null),
+    'missing provider metadata yields an explicit attempt count and unknown token counts');
+    assert(counters.logs.length === 1 && counters.logs[0].endsWith('attempts=1 prompt=? output=? total=?'),
+      'absent token counts are logged as unknown');
+  }
+
   // ── sender gate ────────────────────────────────────────────────────────────────────────────
   {
     const { ipc, counters } = makeIpc();

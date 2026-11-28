@@ -271,6 +271,26 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
       'pane-status-version.js never requires child_process — the resolver is injected');
   }
 
+  {
+    let attempted = 0;
+    const badCommand = versionMod.createClaudeVersionResolver({
+      commandName: 'two words',
+      execFile: () => { attempted += 1; },
+    });
+    const result = await badCommand.discover();
+    assert(!result.ok && result.reason === 'unsafe-command-name' && attempted === 0,
+      'an unsupported version-probe command name refuses before starting a child');
+    const logs = [];
+    const failedProbe = versionMod.createClaudeVersionResolver({
+      execFile: () => { throw new Error('fixture process start failure'); },
+      log: (line) => logs.push(line),
+    });
+    const refused = await failedProbe.discover();
+    assert(!refused.ok && refused.reason === 'version-probe-failed' &&
+      logs.length === 1 && logs[0].includes('version-probe-failed'),
+    'a synchronous process error resolves to a bounded version refusal');
+  }
+
   process.stdout.write(`\npane-status-version: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
 })();

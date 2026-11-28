@@ -279,6 +279,24 @@ process.stdout.write('\n-- source tripwires --\n');
   }
 }
 
+{
+  const { rejects, throws } = require('node:assert/strict');
+  throws(() => createAdmissionPtyBoundary(), /getPty is required/);
+  throws(() => createAdmissionPtyBoundary({ getPty() {} }), /isDirectInputBlocked is required/);
+  assert(!isEligibleClaudePane(null) && !isEligibleClaudePane({ role: 'builder' }),
+    'missing launch facts do not establish eligibility');
+
+  const writes = [];
+  let lookups = 0;
+  const boundary = createAdmissionPtyBoundary({
+    getPty: () => (++lookups === 1 ? { write: (bytes) => writes.push(bytes) } : undefined),
+    isDirectInputBlocked: () => true,
+    delay: () => { throw new Error('must not schedule a submission after failed text delivery'); },
+  });
+  await rejects(boundary.writeAdmitted('pty1', 'Fixture prompt'), { message: WRITE_REASON.PTY_MISSING });
+  assert(writes.length === 0, 'a PTY that disappears before text delivery never receives input');
+}
+
 process.stdout.write(`\nadmission-pty-boundary: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
 })().catch((e) => { process.stderr.write(`admission-pty-boundary: harness error ${e && e.stack}\n`); process.exit(1); });

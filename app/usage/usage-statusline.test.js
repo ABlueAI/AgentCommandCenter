@@ -145,6 +145,21 @@ process.stdout.write('\nusage-statusline: as a real process (stdin in, one line 
   eq(big.stdout, 'usage: status data too large\n', 'oversized input: visible reason');
 }
 
+{
+  eq(usageFile.snapshotFromPayload(null, NOW), null, 'a primitive or missing payload yields no usage snapshot');
+  const filePath = freshPath();
+  const calls = [];
+  const fsx = {
+    mkdirSync() {},
+    writeFileSync() {},
+    renameSync() { calls.push('rename'); throw new Error('fixture rename failure'); },
+    unlinkSync() { calls.push('cleanup'); throw new Error('fixture cleanup failure'); },
+  };
+  eq(handlePayload(JSON.stringify(payload()), { filePath, fsx, nowMs: NOW, pid: 1234 }),
+    'usage: not saved (write-failed)', 'rename failure without an error code gets a bounded status line');
+  eq(calls.join(','), 'rename,rename,cleanup', 'a second rename failure attempts temp cleanup once');
+}
+
 fs.rmSync(tmpRoot, { recursive: true, force: true });
 process.stdout.write(`\nusage-statusline: ${passed} passed, ${failed} failed\n`);
 if (failed) process.exit(1);

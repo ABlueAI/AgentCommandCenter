@@ -511,5 +511,43 @@ process.stdout.write('\nrefusal reasons never leak file contents\n');
 }
 
 // ---------------------------------------------------------------------------
+{
+  const { throws } = require('node:assert/strict');
+  throws(() => createLayoutStore(), /userDataDir is required/);
+  const userDataDir = path.join(os.tmpdir(), 'mako-layout-fixture');
+  const stats = { isFile: () => true, isSymbolicLink: () => false, size: 1 };
+  for (const [readFileSync, reason] of [
+    [() => { throw new Error('fixture read failure'); }, REASON.READ_FAILED],
+    [() => 'not a buffer', REASON.READ_FAILED],
+    [() => Buffer.alloc(MAX_RAW_BYTES + 1), REASON.TOO_LARGE],
+  ]) {
+    const store = createLayoutStore({ userDataDir, fsImpl: { lstatSync: () => stats, readFileSync } });
+    assert(store.load().reason === reason, `post-stat layout read refuses with ${reason}`);
+  }
+
+  const store = createLayoutStore({
+    userDataDir,
+    fsImpl: {
+      lstatSync: () => stats,
+      rmSync: () => { throw new Error('fixture remove failure'); },
+    },
+  });
+  assert(store.reset().reason === REASON.WRITE_FAILED, 'reset failure is returned to the caller');
+}
+
+{
+  for (const [mutate, reason] of [
+    [(layout) => { layout.grid.root.data[0].data.views = null; }, REASON.LAYOUT_SHAPE],
+    [(layout) => { layout.grid.root.data[0].data.views = []; }, REASON.LAYOUT_SHAPE],
+    [(layout) => { layout.panels.pty1.title = 42; }, REASON.LAYOUT_SHAPE],
+  ]) {
+    const layout = clone(FIXTURE);
+    mutate(layout);
+    assert(verdict(layout).reason === reason, 'malformed layout member is refused before persistence');
+  }
+  assert(validateEnvelope({ ...envelopeOf(clone(FIXTURE)), savedAt: '2026-13-01T00:00:00Z' }).reason === REASON.TIMESTAMP,
+    'a syntactically valid timestamp with an invalid month is refused');
+}
+
 process.stdout.write(`\ndockview-layout-store: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

@@ -49,6 +49,22 @@ const RUNTIME = process.execPath;
 const REPORTER = path.join(__dirname, 'pane-status-reporter.js');
 
 (async () => {
+  {
+    const e = makeEnv({ theme: 'fixture' });
+    const original = fs.readFileSync(e.settingsPath, 'utf8');
+    const changed = txnMod.casReplace(e.settingsPath, descriptorMod.sha256('older settings'), '{}\n');
+    assert(!changed.ok && changed.reason === txnMod.TXN_REFUSAL.CAS_MISMATCH &&
+      fs.readFileSync(e.settingsPath, 'utf8') === original, 'stale settings revisions leave the existing bytes intact');
+
+    fs.unlinkSync(e.settingsPath);
+    fs.mkdirSync(e.settingsPath);
+    const unreadable = txnMod.readSettings(e.settingsPath);
+    const refusedWrite = txnMod.casReplace(e.settingsPath, descriptorMod.sha256(''), '{}\n');
+    assert(!unreadable.ok && unreadable.reason === txnMod.TXN_REFUSAL.SETTINGS_UNREADABLE &&
+      !refusedWrite.ok && refusedWrite.reason === txnMod.TXN_REFUSAL.SETTINGS_UNREADABLE &&
+      fs.statSync(e.settingsPath).isDirectory(), 'an unreadable settings path refuses both read and replacement');
+  }
+
   // ---------------------------------------------------------------- install happy path
   {
     const e = makeEnv({ theme: 'dark', hooks: { Stop: [{ matcher: '', hooks: [{ type: 'command', command: 'echo keep' }] }] } });

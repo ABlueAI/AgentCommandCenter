@@ -136,5 +136,26 @@ eq(buildDefaultConfig({ starboardUrl: 'https://fixture.example' }).reason, REASO
 assert(!DEFAULT_LABELS.some((label) => /CRM|Hexona|GoHighLevel/.test(label)),
   'default labels contain no forbidden historical/vendor name');
 
+{
+  const { serializeConfig } = require('./quick-links-policy');
+  eq(validateConfigObject([]).reason, REASON.CONFIG_NOT_OBJECT, 'a config array is refused');
+  eq(validateEntry(null).reason, REASON.ENTRY_NOT_OBJECT, 'a null entry is refused');
+  eq(serializeConfig(config([null])).reason, REASON.ENTRY_NOT_OBJECT, 'serialization propagates entry validation failure');
+  assert(validateConfigObject(Object.assign(Object.create(null), config())).ok,
+    'closed-schema records with a null prototype are accepted');
+}
+
+{
+  const { serializeConfig } = require('./quick-links-policy');
+  const expanded = (n) => config(Array.from({ length: 4 }, (_, i) =>
+    entry(`ql-${i}`, 'Fixture', 'https://fixture.example/' + 'é'.repeat(n))));
+  eq(validateConfigObject(expanded(1500)).reason, REASON.CONFIG_TOO_LARGE,
+    'canonical URL expansion is bounded even when the raw config fits');
+  const nearLimit = expanded(1350);
+  assert(validateConfigObject(nearLimit).ok, 'compact normalized config can fit just under the byte cap');
+  eq(serializeConfig(nearLimit).reason, REASON.CONFIG_TOO_LARGE,
+    'the pretty-printed file must also fit the byte cap');
+}
+
 process.stdout.write(`\nquick-links-policy: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

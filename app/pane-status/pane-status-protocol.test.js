@@ -88,5 +88,14 @@ const hostile = JSON.stringify({ v: 1, e: 'Stop', t: TOKEN, secret: 'SENTINEL-LE
 const refusal = protocol.decodeMessage(hostile);
 assert(JSON.stringify(refusal).indexOf('SENTINEL-LEAK-1234') === -1, 'a refusal never echoes the input that caused it');
 
+{
+  const bytes = protocol.decodeMessage(Buffer.from(line));
+  assert(bytes.ok && bytes.e === 'Stop' && bytes.t === TOKEN, 'a byte buffer decodes through the same wire contract');
+  assert(protocol.decodeMessage({}).reason === protocol.REFUSE.NOT_JSON,
+    'a non-string, non-buffer message is rejected before parsing');
+  assert(protocol.decodeMessage(JSON.stringify({ v: 1, e: 'Stop', t: 42 })).reason === protocol.REFUSE.BAD_TOKEN_SHAPE,
+    'a numeric token is rejected without coercion');
+}
+
 process.stdout.write(`\npane-status-protocol: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

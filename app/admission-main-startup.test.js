@@ -143,7 +143,9 @@ async function bootMain(admissionEnv, options) {
     if (request === 'electron') return electronStub;
     if (request === '@lydell/node-pty') return ptyStub;
     if (opt.childProcess && request === 'child_process' && parent.filename === MAIN_PATH) return opt.childProcess;
-    return realLoad.apply(this, arguments);
+    const loaded = realLoad.apply(this, arguments);
+    if (request === 'child_process' && opt.execFile) return { ...loaded, execFile: opt.execFile };
+    return loaded;
   };
 
   // A fresh module registry, so main.js and every admission module re-evaluate from scratch.
@@ -194,7 +196,67 @@ const LEDGER = 'admission-ledger.json';
     assert(!fs.existsSync(path.join(r.userDataDir, LEDGER)),
       'no ledger file is created with no run configured');
     assert(r.record.singleInstanceLockCalls === 0, 'no single-instance lock is requested');
+    const { handled, webContents } = r.record;
+    const trusted = { sender: webContents, senderFrame: webContents.mainFrame };
+    const tokenStatus = handled.get('get-agent-token-status');
+    const setToken = handled.get('set-agent-token');
+    const clearToken = handled.get('clear-agent-token');
+    const status = tokenStatus(trusted);
+    assert(status.ok && status.hasToken === false && status.available === false,
+      'the registered credential status handler reports unavailable OS encryption');
+    for (const handler of [tokenStatus, setToken, clearToken]) {
+      const denied = handler({});
+      assert(!denied.ok && denied.error === 'untrusted-sender', 'credential IPC refuses an untrusted caller');
+    }
+    const invalid = setToken(trusted, 'fixture input');
+    assert(!invalid.ok && invalid.error.startsWith('not a GitHub token'),
+      'trusted credential IPC still refuses malformed input');
+    assert(!fs.existsSync(path.join(r.userDataDir, 'secure.json')), 'credential refusals create no storage file');
+
+    const invalidTask = { repo: r.userDataDir, task: '' };
+    const creation = await handled.get('new-agent')(trusted, invalidTask);
+    const removal = await handled.get('remove-agent')(trusted, invalidTask);
+    assert(!creation.ok && !removal.ok && /cannot remove worktree/i.test(removal.error),
+      'both worktree commands independently refuse a missing task name');
+    assert(r.record.sent.includes('New agent refused: ' + creation.error) && r.record.sent.includes(removal.error),
+      'both worktree command refusals reach the window');
+
     assert(r.record.ptySpawns === 0, 'no PTY is spawned');
+  }
+
+  {
+    const { deepEqual } = require('node:assert/strict');
+    const gitCalls = [];
+    const r = await bootMain({}, { execFile(command, args, options, callback) {
+      gitCalls.push({ command, args, cwd: options.cwd });
+      const detached = path.join(options.cwd, 'detached fixture');
+      callback(null, [
+        'worktree ' + options.cwd,
+        'branch refs/heads/main',
+        '',
+        'worktree ' + detached,
+        'detached',
+        '',
+      ].join('\n'));
+    } });
+    const { handled, webContents } = r.record;
+    const trusted = { sender: webContents, senderFrame: webContents.mainFrame };
+    const list = handled.get('list-worktrees');
+    let refusal = null;
+    try { await list({}, r.userDataDir); } catch (err) { refusal = err; }
+    assert(refusal && /untrusted|sender/i.test(refusal.message), 'worktree listing refuses an untrusted caller');
+    deepEqual(gitCalls, []);
+    deepEqual(await list(trusted, undefined), []);
+    deepEqual(gitCalls, []);
+    const listed = await list(trusted, r.userDataDir);
+    deepEqual(gitCalls, [{
+      command: 'git', args: ['worktree', 'list', '--porcelain'], cwd: r.userDataDir,
+    }]);
+    deepEqual(listed, [
+      { path: r.userDataDir, branch: 'main' },
+      { path: path.join(r.userDataDir, 'detached fixture'), branch: '(detached)' },
+    ]);
+    assert(listed.length === 2, 'worktree IPC parses named and detached entries, including a path with spaces');
   }
 
   // ---- (2) VALID configuration: THE REGRESSION ------------------------------------------------

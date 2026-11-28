@@ -160,6 +160,19 @@ async function main() {
     same(crlf.calls.length, 1, 'the CRLF case spawns once');
   }
 
+  {
+    const f = fixture();
+    writeConfig(f);
+    const profile = path.join(f.firefoxDir, 'Profiles', 'test');
+    fs.writeFileSync(f.profilesFile, `[Profile0]\nName=Mako\nIsRelative=0\nPath=${profile}\n`);
+    same(await f.api.open('preset-one'), { ok: true }, 'an existing absolute profile is accepted');
+    fs.rmSync(f.profilesFile);
+    fs.mkdirSync(f.profilesFile);
+    same(await f.api.open('preset-one'), { ok: false, reason: 'firefox-profiles-unreadable' },
+      'an unreadable profiles file is distinguished from an absent profile');
+    same(f.calls.length, 1, 'the failed profile read did not launch Firefox');
+  }
+
   process.stdout.write('\nmissing profile or executable\n');
   {
     const f = fixture();

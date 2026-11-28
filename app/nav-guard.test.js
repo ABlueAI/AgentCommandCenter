@@ -189,6 +189,11 @@ function makeGuards(opener) {
   });
   return { g, opened, lines };
 }
+{
+  const { throws } = require('node:assert/strict');
+  throws(() => createNavGuards(), /entryUrl/);
+}
+
 const settle = () => new Promise((r) => setImmediate(r));
 (async () => {
   {

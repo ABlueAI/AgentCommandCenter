@@ -156,6 +156,47 @@ function startPipe() {
 const settle = (ms) => new Promise((r) => setTimeout(r, ms || 400));
 
 (async () => {
+  {
+    const { EventEmitter } = require('node:events');
+    const vm = require('node:vm');
+    const source = fs.readFileSync(REPORTER_SRC, 'utf8');
+    for (const [label, input, token] of [
+      ['non-JSON payload', '{', 'a'.repeat(64)],
+      ['non-object payload', '[]', 'a'.repeat(64)],
+      ['missing event name', '{}', 'a'.repeat(64)],
+      ['malformed pane reference', '{"hook_event_name":"Stop"}', 'invalid'],
+    ]) {
+      const module = { exports: {} };
+      const stdin = new EventEmitter();
+      let connections = 0;
+      stdin.resume = () => {};
+      const fakeProcess = {
+        env: { BLUE_HELM_PANE_STATUS_PIPE: 'fixture-pipe', BLUE_HELM_PANE_STATUS_PANE_REF: token },
+        stdin,
+      };
+      vm.runInNewContext(source, {
+        module, Buffer, process: fakeProcess,
+        require: (name) => {
+          if (name === './pane-status-protocol') return protocol;
+          if (name === 'net') return { createConnection: () => { connections += 1; return new EventEmitter(); } };
+          throw new Error(`Unexpected reporter dependency: ${name}`);
+        },
+        setTimeout: () => ({ unref() {} }),
+        clearTimeout() {},
+      }, { filename: 'pane-status-reporter.js' });
+      module.exports.main();
+      stdin.emit('data', Buffer.from(input));
+      stdin.emit('end');
+      assert(fakeProcess.exitCode === 0 && connections === 0,
+        `the reporter discards ${label} before touching the transport`);
+    }
+  }
+  {
+    const { REFUSAL, validateShimPath } = shimMod;
+    assert(validateShimPath('').reason === REFUSAL.EMPTY, 'an absent shim path is refused');
+    assert(validateShimPath(path.join(root, 'fixture%literal.cmd')).ok, 'a single percent sign is a literal path character');
+  }
+
   // ---------------------------------------------------------------- the encoding itself
   {
     const args = shimMod.buildHookArgs('C:\\some dir\\pane-status-reporter.cmd');

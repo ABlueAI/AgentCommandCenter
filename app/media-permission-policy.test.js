@@ -359,6 +359,25 @@ assert((() => { // policy setup itself refuses a non-file entry (fail closed at 
   const { MIC_CONSTRAINTS } = await import('./renderer/stt-audio-quality.js');
   assert(MIC_CONSTRAINTS.video === false && !!MIC_CONSTRAINTS.audio,
     'renderer MIC_CONSTRAINTS still requests audio-only (video: false) — matches the allowed shape');
-  process.stdout.write(`\nmedia-permission-policy: ${passed} passed, ${failed} failed\n`);
+  {
+  const { wc } = fakeWindow();
+  const calls = [];
+  const handlers = createMediaPermissionHandlers({
+    entryUrl: ENTRY,
+    getTrustedWindow: () => { throw new Error('fixture window lookup failure'); },
+    logRefusal: (line) => calls.push(line),
+  });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    assert(handlers.handlePermissionCheck(wc, 'media', ORIGIN, undefined) === false,
+      'an exception during a permission check fails closed');
+  }
+  assert(calls.length === 1 && calls[0] === '[audio-permission] denied check: ' + REASONS.POLICY_ERROR,
+    'repeated check exceptions emit one bounded refusal');
+  const missing = decideMediaCheck({ permission: 'media', trustedWc: true, requestingOrigin: ORIGIN }, TRUST);
+  assert(missing.allow === false && missing.reason === REASONS.MISSING_DETAILS,
+    'a trusted media check with missing details is refused');
+}
+
+process.stdout.write(`\nmedia-permission-policy: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
 })();

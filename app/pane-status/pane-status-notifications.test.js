@@ -24,7 +24,11 @@ function rig(options = {}) {
   const win = {
     isDestroyed: () => options.destroyed === true,
     isMinimized: () => options.minimized === true,
-    restore: () => actions.push('restore'), show: () => actions.push('show'), focus: () => actions.push('focus'),
+    restore: () => actions.push('restore'), show: () => actions.push('show'),
+    focus: () => {
+      if (options.focusThrows) throw new Error('fixture focus failure');
+      actions.push('focus');
+    },
   };
   const notifier = createPaneStatusNotifications({
     Notification, platform: options.platform || 'win32',
@@ -143,4 +147,12 @@ test('main composes the observer with the existing controller publisher and pres
   assert.match(main,/app\.on\('will-quit', \(\) => \{\s*paneStatusNotifications\.dispose\(\);/);
   assert.match(main,/app\.on\('window-all-closed', \(\) => \{\s*paneStatusNotifications\.dispose\(\);/);
 });
+test('a window focus failure is reported when a notification is activated', () => {
+  const r = rig({ focusThrows: true });
+  r.view('attention');
+  r.shown[0].emit('click');
+  assert.deepEqual(r.actions, ['show']);
+  assert.deepEqual(r.logs, ['[pane-notifications] could not focus Mako']);
+});
+
 console.log(`\npane-status-notifications: ${passed} passed, ${failed} failed`);

@@ -87,6 +87,17 @@ function makeController(overrides) {
 
 (async () => {
   // -----------------------------------------------------------------------------------------------
+  {
+    const rig = makeController({
+      resolveVersion: async () => { throw new Error('must not probe without an installed descriptor'); },
+    });
+    const result = await rig.c.start();
+    assert(result.ok && result.setupState === 'disabled' &&
+      rig.c.enrollPane('pty1').reason === 'not-ready',
+    'an ordinary startup stays disabled and cannot enroll a pane');
+    rig.c.shutdown();
+  }
+
   process.stdout.write('\n6. PTY exit publishes `exited` and revokes the token IMMEDIATELY\n');
   // -----------------------------------------------------------------------------------------------
   {

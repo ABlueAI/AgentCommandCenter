@@ -124,5 +124,51 @@ process.stdout.write('\nraw save bounds and closed schema\n');
   } finally { cleanup(dir); }
 }
 
+{
+  const { throws } = require('node:assert/strict');
+  throws(() => createQuickLinksStore(), /userDataDir is required/);
+  const userDataDir = tempDir();
+  try {
+    throws(() => createQuickLinksStore({ userDataDir, defaultConfig: {} }), /defaultConfig must pass policy/);
+    const stats = { isFile: () => true, isSymbolicLink: () => false, size: 1 };
+    for (const [data, reason] of [
+      [null, STORE_REASON.READ_FAILED],
+      [Buffer.alloc(MAX_CONFIG_BYTES + 1), REASON.CONFIG_TOO_LARGE],
+    ]) {
+      const store = createQuickLinksStore({
+        userDataDir,
+        fsImpl: { lstatSync: () => stats, readFileSync: () => data },
+      });
+      eq(store.load().reason, reason, 'read rechecks the actual buffer before parsing');
+    }
+  } finally {
+    cleanup(userDataDir);
+  }
+}
+
+{
+  const userDataDir = tempDir();
+  try {
+    const file = path.join(userDataDir, CONFIG_FILENAME);
+    fs.writeFileSync(file, JSON.stringify(fixtureConfig()));
+    const before = fs.readFileSync(file);
+    const actions = [];
+    const fsImpl = {
+      ...fs,
+      fsyncSync() { actions.push('flush'); throw new Error('fixture flush failure'); },
+      closeSync(fd) { actions.push('close'); fs.closeSync(fd); },
+      renameSync() { actions.push('rename'); },
+      rmSync(temp, options) { actions.push('remove'); fs.rmSync(temp, options); },
+    };
+    const result = createQuickLinksStore({ userDataDir, fsImpl }).saveText(JSON.stringify(fixtureConfig('Replacement')));
+    eq(result.reason, STORE_REASON.WRITE_FAILED, 'a failed flush returns a bounded write refusal');
+    eq(actions.join(','), 'flush,close,remove', 'failed flush closes and removes the temp file before replacement');
+    assert(fs.readFileSync(file).equals(before) && fs.readdirSync(userDataDir).length === 1,
+      'the previous config remains byte-identical and no temporary file is left');
+  } finally {
+    cleanup(userDataDir);
+  }
+}
+
 process.stdout.write(`\nquick-links-store: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

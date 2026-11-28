@@ -55,6 +55,40 @@ function send(pipeName, payload) {
 const settle = (ms) => new Promise((r) => setTimeout(r, ms || 250));
 
 (async () => {
+  {
+    const { EventEmitter } = require('node:events');
+    const { deepEqual, throws } = require('node:assert/strict');
+    const registry = {};
+    const pipeName = pipeMod.buildPipeName('abcdef01');
+    throws(() => pipeMod.createPaneStatusPipe(), /net is required/);
+    throws(() => pipeMod.createPaneStatusPipe({ net, pipeName }), /registry is required/);
+    throws(() => pipeMod.createPaneStatusPipe({ net, registry, pipeName: 'invalid' }), /pipeName must be/);
+    const logs = [];
+    const fake = new EventEmitter();
+    let closes = 0;
+    fake.listen = () => { throw Object.assign(new Error('fixture bind failure'), { code: 'EACCES' }); };
+    fake.close = () => { closes += 1; };
+    const refused = pipeMod.createPaneStatusPipe({
+      net: { createServer: () => fake }, registry, pipeName, log: (line) => logs.push(line),
+    });
+    deepEqual(await refused.start(), { ok: false, error: 'EACCES' });
+    assert(closes === 1 && !refused.isListening() && !refused.stop() &&
+      logs[0] === '[pane-status] transport FAILED to start: EACCES',
+    'synchronous bind failure closes the partial listener and reports the cause');
+
+    const fatal = [];
+    const listening = new EventEmitter();
+    listening.listen = () => listening.emit('listening');
+    listening.close = () => {};
+    const ready = pipeMod.createPaneStatusPipe({
+      net: { createServer: () => listening }, registry, pipeName, onFatal: (code) => fatal.push(code),
+    });
+    assert((await ready.start()).ok && (await ready.start()).ok, 'starting a listening server is idempotent');
+    listening.emit('error', Object.assign(new Error('fixture listener failure'), { code: 'EIO' }));
+    assert(!ready.isListening() && fatal.join() === 'EIO', 'a listener failure after readiness notifies its owner');
+    ready.stop();
+  }
+
   // Drive the concurrency bound with inert sockets so this check is independent of OS scheduling.
   {
     const server = new EventEmitter();

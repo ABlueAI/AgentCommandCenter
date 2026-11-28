@@ -83,6 +83,20 @@ const fakeGit = (answers) => async (args) => {
   eq(formatBuildLabel({ version: '1.0.0', instanceTag: null, commit: 'f57066c', branch: 'main' }), 'Mako 1.0.0 · main@f57066c', 'the stable copy keeps the plain label');
   eq(formatBuildLabel({ version: '1.0.0', instanceTag: '<b>x</b>', commit: 'f57066c', branch: 'main' }), 'Mako 1.0.0 · main@f57066c', 'an unexpected tag is dropped');
 
+  {
+    const info = await readBuildInfo({
+      version: 0,
+      runGit: async (args) => {
+        if (args[0] === 'status') throw new Error('fixture status failure');
+        return args[1] === '--short' ? 'abc1234' : 'main';
+      },
+    });
+    eq(info.version, null, 'invalid version is unknown');
+    eq(info.commit, 'abc1234', 'status failure preserves commit');
+    eq(info.dirty, null, 'status failure leaves dirty state unknown');
+    eq(info.label, 'Mako · main@abc1234', 'label preserves the known git identity');
+  }
+
   const pkg = require('./package.json');
   eq(pkg.version, '1.0.0', 'package.json carries the 1.0.0 release version');
 

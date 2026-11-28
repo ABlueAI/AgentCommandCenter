@@ -279,5 +279,28 @@ section('REFUSAL REASONS ARE BOUNDED CONSTANTS');
     'reason is a declared constant carrying no path');
 }
 
+{
+  const path = require('node:path');
+  const os = require('node:os');
+  const { throws } = require('node:assert/strict');
+  throws(() => createRoleDefinitionResolver(), /fsx.existsSync is required/);
+  throws(() => createRoleDefinitionResolver({ fsx: { existsSync() {} } }), /probeRegistryKey is required/);
+  const cwd = path.join(os.tmpdir(), 'mako-role-fixture');
+  const agentsDir = path.join(cwd, '.claude', 'agents');
+  const resolver = createRoleDefinitionResolver({
+    fsx: {
+      existsSync: (candidate) => candidate === agentsDir,
+      readdirSync: () => { throw new Error('fixture directory read failure'); },
+    },
+    homeDir: path.join(cwd, 'home'),
+    probeRegistryKey: noManaged,
+    managedPaths: [],
+    managedRegistryKeys: [],
+  });
+  const result = resolver.resolve({ role: 'builder', cwd });
+  assert(!result.ok && result.reason === REASON.CANDIDATE_UNREADABLE,
+    'failure to list an existing role directory refuses the resolution');
+}
+
 process.stdout.write('\nrole-definition-resolver: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);

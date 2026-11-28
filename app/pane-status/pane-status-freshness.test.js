@@ -86,5 +86,12 @@ assert(freshness.classifyEvent('PermissionRequest', 'working').apply === 'none',
 assert(freshness.classifyEvent('PostToolUse', 'unknown').apply === 'none',
   'a stale-unknown pane is NOT resurrected by a late PostToolUse');
 
+assert(resolve({ lastEvent: 'PostToolUse' }).reason === R.NO_SIGNAL,
+  'a refresh-only last event cannot stand in for a state-bearing signal');
+assert(resolve({ staleMs: 20, now: 20 }).state === 'working' &&
+  resolve({ staleMs: 20, now: 21 }).reason === R.STALE,
+'custom stale thresholds use the same inclusive freshness boundary');
+assert(freshness.resolveDisplayState().reason === R.VERSION_MISMATCH, 'missing version evidence leaves state unknown');
+
 process.stdout.write(`\npane-status-freshness: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
