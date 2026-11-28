@@ -139,10 +139,13 @@ const depsWithoutS15 = Object.assign({}, currentPkg.dependencies);
 delete depsWithoutS15[S15_DEPENDENCY[0]];
 delete depsWithoutS15[IP_DEPENDENCY[0]];
 assert(JSON.stringify(depsWithoutS15) === JSON.stringify(basePkg.dependencies), 'runtime dependencies unchanged from base apart from S15\'s and #162\'s one addition each');
-// S36 pins Electron's certificate-advisory fix; every other dev dependency stays unchanged.
+// S36 pins Electron's certificate-advisory fix; S72 (the e2e smoke test, docs/decisions/OSS-e2e-playwright.md)
+// adds playwright-core, pinned exactly, as a dev dependency. Every other dev dependency stays unchanged.
+const S72_DEV_DEPENDENCY = ['playwright-core', '1.65.1'];
 assert(currentPkg.devDependencies.electron === '42.11.16', 'S36: electron is pinned exactly to 42.11.16');
-assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify({ ...basePkg.devDependencies, electron: '42.11.16' }),
-  'devDependencies unchanged from base apart from S36\'s Electron pin');
+assert(currentPkg.devDependencies[S72_DEV_DEPENDENCY[0]] === S72_DEV_DEPENDENCY[1], 'S72: playwright-core is pinned exactly to 1.65.1');
+assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify({ ...basePkg.devDependencies, electron: '42.11.16', [S72_DEV_DEPENDENCY[0]]: S72_DEV_DEPENDENCY[1] }),
+  'devDependencies unchanged from base apart from S36\'s Electron pin and S72\'s playwright-core pin');
 // Compared as JSON with the app's OWN version fields set aside: the 1.0.0 release bump (2026-10-16)
 // changes those two fields and nothing else, and the point here is that no dependency changed.
 // Also set aside: the 1.1 S02 `npm audit fix` (docs/DEPENDENCY-ADVISORIES.md), which moved exactly
@@ -159,10 +162,19 @@ const AUDIT_FIX = {
 };
 // S15's three new lockfile entries (the server and the Playwright it depends on, a pinned pre-release).
 // Each must match this version, registry tarball and integrity exactly, and is then set aside.
+// Since S72 put its own playwright-core at the top level, npm keeps S15's pre-release copy nested
+// under the two packages that need it, so that one entry now appears at two keys, unchanged.
+const S15_CORE = ['1.65.0-alpha-2026-10-30', 'sha512-LPMw8B/HRQKMcJeXTqWSrkB/AfCKKmbDQMbu0p7zg8MgibOWaKMjZWR/StAtrQkOxvOmZEju1o1TnPgdoOCwrg=='];
 const S15_LOCK = {
   'node_modules/@playwright/mcp': ['0.0.84', 'sha512-weqLrA7/D8MJzNV9/t3Hnjp100tS2sxFXKeb2gH6Nhktqmdfvx5qRA9AZ5Mhjnre1jY0wltsrRK5VZS5NBgcvw=='],
   'node_modules/playwright': ['1.65.0-alpha-2026-10-30', 'sha512-dmAJMVHKzHvMQjn+XDcaq/pxaZ0W6n8i78rwTM+VGRtQ3WBF5ZiSdB1yL/cyoYUGUMwg3jxN65KqC9cERaCbIg=='],
-  'node_modules/playwright-core': ['1.65.0-alpha-2026-10-30', 'sha512-LPMw8B/HRQKMcJeXTqWSrkB/AfCKKmbDQMbu0p7zg8MgibOWaKMjZWR/StAtrQkOxvOmZEju1o1TnPgdoOCwrg=='],
+  'node_modules/playwright/node_modules/playwright-core': S15_CORE,
+  'node_modules/@playwright/mcp/node_modules/playwright-core': S15_CORE,
+};
+// S72's one new lockfile entry: the e2e smoke test's playwright-core, a dev dependency, pinned the
+// same way and then set aside.
+const S72_LOCK = {
+  'node_modules/playwright-core': ['1.65.1', 'sha512-hqPpz7blSMPxWVdoeE1yiBSzXsKiVOd2k+kjCvmUywD2GPO2Dd9HfcWnq9NN0GHbNZDFgZ9JfBFr+X5/BLo0qw=='],
 };
 // #162's one new lockfile entry, pinned the same way and then set aside.
 const IP_LOCK = {
@@ -178,9 +190,18 @@ for (const [key, [version, integrity]] of Object.entries(IP_LOCK)) {
     && entry.resolved === `https://registry.npmjs.org/${name}/-/${name}-${version}.tgz` && !entry.hasInstallScript,
     `#162: ${name} is ${version} (MIT, no install script) from registry.npmjs.org with the pinned integrity`);
 }
-for (const [key, [version, integrity]] of Object.entries(S15_LOCK)) {
+for (const [key, [version, integrity]] of Object.entries(S72_LOCK)) {
   const entry = currentLock.packages[key] || {};
   const name = key.slice('node_modules/'.length);
+  assert(entry.version === version && entry.integrity === integrity && entry.license === 'Apache-2.0' && entry.dev === true
+    && entry.resolved === `https://registry.npmjs.org/${name}/-/${name}-${version}.tgz` && !entry.hasInstallScript
+    && !entry.dependencies,
+    `S72: ${name} is ${version} (Apache-2.0, dev only, no install script, no dependencies) from registry.npmjs.org with the pinned integrity`);
+}
+for (const [key, [version, integrity]] of Object.entries(S15_LOCK)) {
+  const entry = currentLock.packages[key] || {};
+  // The package name is what follows the last node_modules/ (a nested key keeps its parent's path).
+  const name = key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
   const file = name.split('/').pop();
   assert(entry.version === version && entry.integrity === integrity
     && entry.resolved === `https://registry.npmjs.org/${name}/-/${file}-${version}.tgz`,
@@ -202,8 +223,11 @@ const withoutOwnVersion = (lockText) => {
     if (lock.packages[''].dependencies) delete lock.packages[''].dependencies[S15_DEPENDENCY[0]];
     if (lock.packages[''].dependencies) delete lock.packages[''].dependencies[IP_DEPENDENCY[0]];
     if (lock.packages[''].devDependencies) lock.packages[''].devDependencies.electron = basePkg.devDependencies.electron;
+    if (lock.packages[''].devDependencies) delete lock.packages[''].devDependencies[S72_DEV_DEPENDENCY[0]];
   }
-  for (const key of Object.keys(S15_LOCK)) if (lock.packages) delete lock.packages[key];
+  // S15's top-level playwright-core (before S72) and its nested copies (after S72) are both set
+  // aside, so this comparison holds against a base on either side of S72.
+  for (const key of [...Object.keys(S15_LOCK), ...Object.keys(S72_LOCK)]) if (lock.packages) delete lock.packages[key];
   for (const key of Object.keys(IP_LOCK)) if (lock.packages) delete lock.packages[key];
   for (const key of Object.keys(AUDIT_FIX)) {
     if (lock.packages && lock.packages[key]) {
@@ -215,7 +239,7 @@ const withoutOwnVersion = (lockText) => {
   return JSON.stringify(lock);
 };
 assert(withoutOwnVersion(read('package-lock.json')) === withoutOwnVersion(fromBase('package-lock.json')),
-  'package-lock.json has no dependency delta from base beyond the S02 audit fix, S15\'s three entries, S36\'s Electron pin and #162\'s ipaddr.js');
+  'package-lock.json has no dependency delta from base beyond the S02 audit fix, S15\'s three entries, S36\'s Electron pin, #162\'s ipaddr.js and S72\'s playwright-core');
 const requiredTests = [
   'quick-links-policy.test.js', 'quick-links-store.test.js', 'quick-links-ipc.test.js',
   'quick-links-integration.test.js', 'renderer/quick-links-view.test.js',

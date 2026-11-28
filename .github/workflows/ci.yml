@@ -1,6 +1,7 @@
-# CI: the same two gates a contributor runs locally, on GitHub's Windows machines.
+# CI: the gates a contributor runs locally, on GitHub's Windows machines.
 #   app tests   -> `npm test` in app/ (the full node + Electron chain)
 #   PowerShell  -> scripts/run-pester.ps1 (every *.Tests.ps1, Pester 3.x/4.x)
+#   e2e smoke   -> app/e2e/first-window-smoke.js (S72; not a required check)
 # Read-only token. This workflow never merges, approves, labels or pushes anything.
 # Actions are pinned to full commit SHAs (tag in the trailing comment); app/ci-hygiene.test.js
 # fails if a `uses:` line is not. The two job names are required checks on main: don't rename them.
@@ -39,6 +40,36 @@ jobs:
       - name: npm test
         working-directory: app
         run: npm test
+
+  # S72: Playwright's _electron.launch starts the real Mako and checks its first window loads
+  # (app/e2e/first-window-smoke.js). Two broken fixture apps run first with --expect-fail, so every
+  # run also proves the check can fail. Not a required check unless Blue adds it to the ruleset.
+  e2e:
+    name: E2E smoke (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install app dependencies
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+      - name: Negative control (an app that exits before its window opens must fail)
+        working-directory: app
+        timeout-minutes: 5
+        run: node e2e/first-window-smoke.js --app e2e/fixtures/exits-on-start --expect-fail
+      - name: Negative control (a window that never boots must fail)
+        working-directory: app
+        timeout-minutes: 5
+        run: node e2e/first-window-smoke.js --app e2e/fixtures/never-boots --expect-fail
+      - name: First-window smoke on Mako
+        working-directory: app
+        timeout-minutes: 5
+        run: node e2e/first-window-smoke.js --artifacts e2e-artifacts
 
   pester:
     name: PowerShell tests (Windows)
