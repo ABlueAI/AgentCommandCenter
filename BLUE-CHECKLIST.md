@@ -1199,6 +1199,20 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* you tell an agent the Reviewer answered from the thread (or what went wrong). It
     ticks this with the date. This is S15's "Done when".
 
+- [ ] **98. Re-install the page reader's browser after PR #346 (PR #346).** About **5 minutes**, on
+  each PC that has used the page reader, on the next Tuesday or Friday PC-check evening after merging
+  PR #346. Step 98 comes from PR #346; step numbers 92 and 94 to 97 belong to open PRs. The PR moves
+  Playwright to 1.66.0-alpha-2026-11-18, which needs Chromium build 1255 (the old pin used 1252;
+  verified from each version's `browsers.json`). Mako's own check passes with the old build still on
+  disk, so without this step the page reader fails only inside its pane.
+  - In PowerShell, run `node --version`: it must be 20 or later (the new `@playwright/mcp` needs it).
+  - Pull `main`, run `npm ci` in `app`, then `npx playwright install chromium` in `app`, and restart
+    Mako fully.
+  - **New Agent > 📄 Page**, paste any public page URL, **Create & Launch**: a Chromium window opens
+    and the pane writes `report.md`.
+  - *Done when:* you tell an agent the page was read (or what went wrong, with the pane's error). It
+    ticks this with the date and how it checked.
+
 - [ ] **74. Issue #211 on your PC: run the app tests with page-reader installed.** About **5 minutes**
   with dependencies already installed, at the next PC check after the draft fix is available.
   - Check out the fix branch on a Windows PC where the page-reader agent is already installed.

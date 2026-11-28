@@ -25,7 +25,7 @@
   "dependencies": {
     "@huggingface/transformers": "3.8.1",
     "@lydell/node-pty": "^1.2.0-beta.12",
-    "@playwright/mcp": "0.0.84",
+    "@playwright/mcp": "0.0.86",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-unicode11": "^0.9.0",
     "@xterm/addon-web-links": "^0.12.0",
