@@ -280,8 +280,9 @@
   <div id="modal" class="modal-backdrop hidden">
     <div class="modal">
       <h3>New Agent</h3>
-      <label id="taskNameLabel">Task name <span class="muted">(kebab-case)</span></label>
-      <input id="taskName" placeholder="e.g. search-bar" />
+      <label id="taskNameLabel" for="taskName">Task name <span class="muted">(kebab-case)</span></label>
+      <input id="taskName" placeholder="e.g. search-bar" aria-describedby="videoUrlError" />
+      <p id="videoUrlError" class="range-error hidden" role="alert"></p>
       <label>Role</label>
       <div class="agent-choices role-choices">
         <button class="choice active" data-role="builder">🔨 Builder</button>

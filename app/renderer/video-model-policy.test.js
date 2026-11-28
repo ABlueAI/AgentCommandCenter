@@ -357,7 +357,13 @@ section('renderer wiring: script order, honest copy, and the concrete launch val
   ok(!/\bevery run is paid\b|\bthis run is free\b/i.test(html), 'index.html never promises a run is free or calls every request paid');
 
   const appSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
-  ok(/videoModel:\s*state\.videoModel/.test(appSrc), 'createAgent still passes the concrete state.videoModel to ptyStart');
+  // The launch reads state.videoModel either directly in the payload or from a snapshot of state
+  // taken when the dialog is submitted (PR #353: options stay with their submission), and the
+  // Video Scout payload then carries that snapshot.
+  ok(/videoModel:\s*state\.videoModel/.test(appSrc) ||
+    (/const\s*\{[^}]*\bvideoModel\b[^}]*\}\s*=\s*state\s*;/.test(appSrc) &&
+      /videoScout:\s*true[\s\S]{0,200}\bvideoModel\s*,/.test(appSrc)),
+    'createAgent still passes the concrete state.videoModel to ptyStart');
   ok(appSrc.indexOf("videoModel: 'auto'") === -1 && !/videoModel:\s*['"]\s*['"]/.test(appSrc),
     "the renderer→main payload carries no 'auto' or blank model");
   ok(/modelPolicy = videoModelPolicy\.resetPolicyState\(\)/.test(appSrc), 'openModal resets the policy session');
