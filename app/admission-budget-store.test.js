@@ -16,6 +16,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const {
   createAdmissionLedgerStore, LEDGER_FILENAME, LOCK_FILENAME, MAX_RAW_BYTES, STORE_REASON,
   CHECKSUM_FIELD, canonicalize, checksumOf,
@@ -136,17 +137,168 @@ try {
     store.save(GOOD_DOC, null);
     const loaded = store.load();
     const before = fs.readFileSync(store.ledgerPath());
-    // Model another live application process holding the fixed lock. Remove exactly the lock this
-    // test created, in this test-owned directory, after asserting the refusal.
+    // An old-format lock carries no owner identity, so recovery must refuse it.
     fs.writeFileSync(store.lockPath(), 'test-owned-lock', 'utf8');
     const changed = JSON.parse(JSON.stringify(GOOD_DOC));
     changed.runs['evidence-run-0001'].admitted = 2;
     const rejected = store.save(changed, loaded.revision);
     assert(rejected.ok === false && rejected.reason === STORE_REASON.CONFLICT,
-      'an already-held cross-process lock refuses visibly');
+      'an ownerless legacy lock refuses visibly');
     assert(fs.readFileSync(store.ledgerPath()).equals(before),
       'a lock conflict leaves the canonical ledger byte-identical');
     fs.rmSync(store.lockPath());
+  }
+  {
+    const dir = freshDir('cas-live-owner');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    const owner = path.join(store.lockPath(), `${process.pid}-${'f'.repeat(32)}`);
+    fs.mkdirSync(owner, { recursive: true });
+    const denied = store.save(GOOD_DOC, null);
+    assert(denied.ok === false && denied.reason === STORE_REASON.CONFLICT,
+      'a lock with a live owner refuses visibly');
+    assert(fs.existsSync(owner) && !fs.existsSync(store.ledgerPath()),
+      'a live owner marker survives and the contender writes no ledger');
+  }
+  {
+    // Every shape recovery must not clear refuses as a conflict, leaves the lock as it was, writes no
+    // ledger, and says in the log why the lock is still held (audit main:18 follow-up).
+    const shapes = [
+      ['two entries', (lock) => { fs.mkdirSync(path.join(lock, `999999-${'a'.repeat(32)}`), { recursive: true });
+        fs.mkdirSync(path.join(lock, `999998-${'b'.repeat(32)}`)); }],
+      ['a marker name that is not an owner', (lock) => { fs.mkdirSync(path.join(lock, 'not-an-owner'), { recursive: true }); }],
+      ['an owner marker that is a file', (lock) => { fs.mkdirSync(lock, { recursive: true });
+        fs.writeFileSync(path.join(lock, `999999-${'c'.repeat(32)}`), ''); }],
+      ['an owner PID above the Windows range', (lock) => { fs.mkdirSync(path.join(lock, `9999999999-${'d'.repeat(32)}`), { recursive: true }); }],
+      ['a lock file from an older Mako', (lock) => { fs.writeFileSync(lock, ''); }],
+    ];
+    for (const [label, make] of shapes) {
+      const dir = freshDir(`cas-refuse-shape-${shapes.indexOf(shapes.find((x) => x[0] === label))}`);
+      const lines = [];
+      const store = createAdmissionLedgerStore({ userDataDir: dir, log: (l) => lines.push(l) });
+      make(store.lockPath());
+      const snapshot = () => (fs.lstatSync(store.lockPath()).isDirectory()
+        ? fs.readdirSync(store.lockPath()).sort().join('|') : 'file');
+      const before = snapshot();
+      const denied = store.save(GOOD_DOC, null);
+      assert(denied.ok === false && denied.reason === STORE_REASON.CONFLICT, `${label}: refused as a conflict`);
+      assert(snapshot() === before && !fs.existsSync(store.ledgerPath()), `${label}: the lock survives and no ledger is written`);
+      assert(lines.some((l) => l.includes('admission-ledger.json.lock is held') && !l.includes(dir)),
+        `${label}: the log says the lock is held, without the path`);
+    }
+  }
+  {
+    // A crash between removing the owner marker and removing the folder leaves it empty: recover it.
+    const dir = freshDir('cas-empty-lock');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    fs.mkdirSync(store.lockPath());
+    assert(store.save(GOOD_DOC, null).ok === true && !fs.existsSync(store.lockPath()),
+      'an empty lock folder is recovered and the save succeeds');
+  }
+  {
+    // A clock adjustment can make a live owner's marker appear older than the boot.
+    const dir = freshDir('cas-old-live-owner');
+    const store = createAdmissionLedgerStore({ userDataDir: dir, log: () => {} });
+    const owner = path.join(store.lockPath(), `${process.pid}-${'e'.repeat(32)}`);
+    fs.mkdirSync(owner, { recursive: true });
+    const old = new Date('2000-01-01T00:00:00Z');
+    fs.utimesSync(owner, old, old);
+    const denied = store.save(GOOD_DOC, null);
+    assert(denied.ok === false && denied.reason === STORE_REASON.CONFLICT,
+      'an old marker with a live owner still refuses');
+    assert(fs.existsSync(owner) && !fs.existsSync(store.ledgerPath()),
+      'the old marker and the ledger are left alone while the owner is alive');
+  }
+  {
+    // A failed release is the stuck state row main:18 is about: it is logged, and later saves in this
+    // process refuse rather than proceed without the lock.
+    const dir = freshDir('cas-release-fails');
+    const lines = [];
+    let failRelease = true;
+    const store = createAdmissionLedgerStore({ userDataDir: dir, log: (l) => lines.push(l), fsImpl: {
+      ...fs,
+      rmdirSync(target, ...args) {
+        if (failRelease && path.dirname(target) === store.lockPath()) {
+          const err = new Error('denied'); err.code = 'EPERM'; throw err;
+        }
+        return fs.rmdirSync(target, ...args);
+      },
+    } });
+    const first = store.save(GOOD_DOC, null);
+    assert(first.ok === true, 'the save itself still reports its result');
+    assert(lines.includes('[admission] could not release the ledger write lock'), 'the failed release is logged');
+    const next = store.save(GOOD_DOC, first.revision);
+    assert(next.ok === false && next.reason === STORE_REASON.CONFLICT, 'a later save refuses while our lock is stuck');
+    failRelease = false;
+  }
+  {
+    // A failure while taking the lock is logged with its error code, not only refused.
+    const dir = freshDir('cas-acquire-fails');
+    const lines = [];
+    const store = createAdmissionLedgerStore({ userDataDir: dir, log: (l) => lines.push(l), fsImpl: {
+      ...fs,
+      mkdtempSync() { const err = new Error('denied'); err.code = 'EPERM'; throw err; },
+    } });
+    const denied = store.save(GOOD_DOC, null);
+    assert(denied.ok === false && denied.reason === STORE_REASON.WRITE_FAILED, 'a lock failure refuses as write-failed');
+    assert(lines.some((l) => l.includes('could not take the ledger write lock: EPERM')), 'the lock failure is logged with its code');
+  }
+  {
+    const dir = freshDir('cas-dead-owner');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    const initial = store.save(GOOD_DOC, null);
+    const leaveLock = () => spawnSync(process.execPath, ['-e', `
+      const fs = require('fs');
+      const { createAdmissionLedgerStore } = require(process.argv[1]);
+      const store = createAdmissionLedgerStore({ userDataDir: process.argv[2], fsImpl: {
+        ...fs,
+        writeFileSync(file, ...args) {
+          if (typeof file === 'string' && file.endsWith('.tmp')) process.exit(42);
+          return fs.writeFileSync(file, ...args);
+        },
+      } });
+      store.save(store.load().doc, process.argv[3]);
+    `, require.resolve('./admission-budget-store'), dir, initial.revision]);
+    const child = leaveLock();
+    assert(child.status === 42 && fs.existsSync(store.lockPath()),
+      'the independent writer exited while holding the lock');
+    const before = fs.readFileSync(store.ledgerPath());
+    const changed = JSON.parse(JSON.stringify(GOOD_DOC));
+    changed.runs['evidence-run-0001'].admitted = 2;
+    const stale = store.save(changed, '0'.repeat(64));
+    assert(stale.ok === false && stale.reason === STORE_REASON.CONFLICT,
+      'recovery still refuses an outdated ledger revision');
+    assert(fs.readFileSync(store.ledgerPath()).equals(before),
+      'the stale revision leaves the ledger byte-identical');
+    assert(!fs.existsSync(store.lockPath()), 'the stale revision leaves no held lock');
+
+    const secondChild = leaveLock();
+    assert(secondChild.status === 42 && fs.existsSync(store.lockPath()), 'a second writer leaves an abandoned lock');
+    if (secondChild.status === 42 && fs.existsSync(store.lockPath())) {
+      const staleOwner = path.join(store.lockPath(), fs.readdirSync(store.lockPath())[0]);
+      const liveOwner = path.join(store.lockPath(), `${process.pid}-${'f'.repeat(32)}`);
+      const delayed = createAdmissionLedgerStore({ userDataDir: dir, fsImpl: {
+        ...fs,
+        rmdirSync(target) {
+          if (target === staleOwner) {
+            // Another contender recovers first and acquires the lock before this deletion runs.
+            fs.rmdirSync(staleOwner);
+            fs.mkdirSync(liveOwner);
+          }
+          return fs.rmdirSync(target);
+        },
+      } });
+      const rejected = delayed.save(changed, initial.revision);
+      assert(rejected.ok === false && rejected.reason === STORE_REASON.CONFLICT,
+        'a delayed recovery contender refuses when another writer owns the lock');
+      assert(fs.existsSync(liveOwner) && fs.readFileSync(store.ledgerPath()).equals(before),
+        'the contender leaves the replacement owner and the ledger intact');
+      fs.rmdirSync(liveOwner);
+    }
+
+    assert(leaveLock().status === 42, 'a third writer leaves an abandoned lock');
+    assert(store.save(changed, initial.revision).ok === true && store.load().doc.runs['evidence-run-0001'].admitted === 2,
+      'a later writer with the correct revision recovers after the holder exits');
+    assert(!fs.existsSync(store.lockPath()), 'successful recovery leaves no held lock');
   }
   {
     const dir = freshDir('cas-revision-required');

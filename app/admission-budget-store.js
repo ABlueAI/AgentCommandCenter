@@ -68,6 +68,7 @@ const crypto = require('crypto');
 // single atomic write keeps the whole history consistent.
 const LEDGER_FILENAME = 'admission-ledger.json';
 const LOCK_FILENAME = 'admission-ledger.json.lock';
+const LOCK_OWNER_PATTERN = /^([1-9][0-9]{0,9})-[a-f0-9]{32}$/;
 
 // A ledger is a small map of small records. 256 KiB is orders of magnitude more than
 // MAX_PERSISTED_RUNS records need and still bounds a hostile or corrupted file before it is parsed.
@@ -98,6 +99,17 @@ const STORE_REASON = Object.freeze({
 });
 
 function refuse(reason) { return { ok: false, reason }; }
+
+function ownerIsGone(pid) {
+  if (pid > 0x7fffffff) return false;
+  // Only a missing PID proves that the recorded owner is gone.
+  try {
+    process.kill(pid, 0); // Signal zero only queries existence.
+    return false;
+  } catch (err) {
+    return err.code === 'ESRCH';
+  }
+}
 
 /**
  * Deterministic canonical serialization for checksumming.
@@ -131,13 +143,88 @@ const CHECKSUM_PATTERN = /^[0-9a-f]{64}$/;
  * @param {string} deps.userDataDir  Electron `userData`. MAIN supplies this; nothing downstream of
  *                                   the renderer or the PTY supplies any part of a path.
  * @param {object} [deps.fsImpl]     Injectable for tests.
+ * @param {function} [deps.log]      Reports cleanup failures after the write outcome is known, and
+ *                                   why a held write lock could not be recovered.
  */
-function createAdmissionLedgerStore({ userDataDir, fsImpl = fs } = {}) {
+function createAdmissionLedgerStore({ userDataDir, fsImpl = fs, log = console.warn } = {}) {
   if (typeof userDataDir !== 'string' || !userDataDir) {
     throw new Error('createAdmissionLedgerStore: userDataDir is required');
   }
   const ledgerPath = path.join(userDataDir, LEDGER_FILENAME);
   const lockPath = path.join(userDataDir, LOCK_FILENAME);
+
+  // A populated directory is published atomically. The fixed path cannot replace another
+  // populated directory, and an empty one can only be left after the owner marker is removed.
+  // The unique marker lets a recovery contender remove only the owner it actually verified.
+  function removeLockIfEmpty() {
+    try { fsImpl.rmdirSync(lockPath); }
+    catch (err) {
+      if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(err.code)) throw err;
+    }
+  }
+
+  // A held lock that recovery refuses to clear is logged with why, so a stuck lock can be told apart
+  // from a second Mako window. The log names only the lock's file name, never the path.
+  function refuseRecovery(why) {
+    log(`[admission] ledger write lock ${LOCK_FILENAME} is held (${why}); NOTHING is sent while it is.`);
+    return false;
+  }
+
+  function recoverLock() {
+    let entries;
+    try {
+      if (!fsImpl.lstatSync(lockPath).isDirectory()) return refuseRecovery('a lock file from an older Mako, or not a folder');
+      entries = fsImpl.readdirSync(lockPath, { withFileTypes: true });
+    } catch (err) {
+      if (err.code === 'ENOENT') return true;
+      throw err;
+    }
+    if (entries.length !== 0) {
+      const [entry] = entries;
+      const match = LOCK_OWNER_PATTERN.exec(entry.name);
+      if (entries.length !== 1 || !entry.isDirectory() || !match) {
+        return refuseRecovery('unexpected entries in the lock folder');
+      }
+      const pid = Number(match[1]);
+      if (!ownerIsGone(pid)) {
+        return refuseRecovery(`could not confirm owner process ${pid} has exited`);
+      }
+      try { fsImpl.rmdirSync(path.join(lockPath, entry.name)); }
+      catch (err) {
+        // Another recovery contender already removed this exact marker.
+        if (err.code !== 'ENOENT') throw err;
+      }
+    }
+    removeLockIfEmpty();
+    return true;
+  }
+
+  function acquireLock() {
+    let candidate;
+    try {
+      if (!recoverLock()) return refuse(STORE_REASON.CONFLICT);
+      const owner = `${process.pid}-${crypto.randomUUID().replaceAll('-', '')}`;
+      candidate = fsImpl.mkdtempSync(`${lockPath}.pending-`);
+      fsImpl.mkdirSync(path.join(candidate, owner));
+      try { fsImpl.renameSync(candidate, lockPath); }
+      catch (err) {
+        // Windows and Unix report a competing directory under different rename error codes.
+        if (err.code === 'ENOTEMPTY' || err.code === 'EEXIST' ||
+            fsImpl.lstatSync(lockPath, { throwIfNoEntry: false })) return refuse(STORE_REASON.CONFLICT);
+        throw err;
+      }
+      candidate = undefined;
+      return { ok: true, owner };
+    } catch (err) {
+      log(`[admission] could not take the ledger write lock: ${(err && err.code) || (err && err.name) || 'unknown error'}`);
+      return refuse(STORE_REASON.WRITE_FAILED);
+    } finally {
+      if (candidate) {
+        try { fsImpl.rmSync(candidate, { recursive: true, force: true }); }
+        catch { log('[admission] could not remove the unpublished ledger lock'); }
+      }
+    }
+  }
 
   /**
    * Read + parse. Never throws; always returns a bounded result.
@@ -258,15 +345,8 @@ function createAdmissionLedgerStore({ userDataDir, fsImpl = fs } = {}) {
     if (typeof text !== 'string') return refuse(STORE_REASON.NOT_SERIALIZABLE);
     if (Buffer.byteLength(text, 'utf8') > MAX_RAW_BYTES) return refuse(STORE_REASON.TOO_LARGE);
 
-    let lockFd;
-    try {
-      // `wx` is the cross-process serialization primitive. A second Blue Helm process is accidental,
-      // not adversarial, and therefore inside this control's boundary. The lock plus the revision
-      // comparison prevents two such processes from spending the same last admission.
-      lockFd = fsImpl.openSync(lockPath, 'wx');
-    } catch (err) {
-      return refuse(err && err.code === 'EEXIST' ? STORE_REASON.CONFLICT : STORE_REASON.WRITE_FAILED);
-    }
+    const lock = acquireLock();
+    if (!lock.ok) return lock;
 
     try {
       // Re-read only after owning the lock. The policy layer also preflights so an already-rejected
@@ -288,13 +368,18 @@ function createAdmissionLedgerStore({ userDataDir, fsImpl = fs } = {}) {
         fsImpl.writeFileSync(tmp, text, { encoding: 'utf8' });
         fsImpl.renameSync(tmp, ledgerPath);
       } catch {
-        try { fsImpl.rmSync(tmp, { force: true }); } catch { /* temp cleanup is best-effort */ }
+        try { fsImpl.rmSync(tmp, { force: true }); }
+        catch { log('[admission] could not remove the temporary ledger file'); }
         return refuse(STORE_REASON.WRITE_FAILED);
       }
       return { ok: true, revision: stamped[CHECKSUM_FIELD] };
     } finally {
-      try { fsImpl.closeSync(lockFd); } catch { /* close is best-effort after the decision */ }
-      try { fsImpl.rmSync(lockPath, { force: true }); } catch { /* a leftover lock fails closed */ }
+      try {
+        fsImpl.rmdirSync(path.join(lockPath, lock.owner));
+        removeLockIfEmpty();
+      } catch {
+        log('[admission] could not release the ledger write lock');
+      }
     }
   }
 

@@ -274,7 +274,7 @@ function harness(opts) {
     const startFailed = /const onStartFailed = \(reason\) => \{[\s\S]*?\n  \};/.exec(appSrc);
     assert(Boolean(startFailed) && startFailed[0].includes('term.options.disableStdin = true;'),
       'a failed start disables the pane\'s input');
-    const ptyExit = /cc\.onPtyExit\(\(\{ id \}\) => \{[\s\S]*?\n  \}\);/.exec(appSrc);
+    const ptyExit = /cc\.onPtyExit\((?:async )?\(\{ id(?:, closed)? \}\) => \{[\s\S]*?\n  \}\);/.exec(appSrc);
     assert(Boolean(ptyExit) && ptyExit[0].includes('t.term.options.disableStdin = true;'),
       'a PTY exit disables the pane\'s input');
     assert(!/cc\.clipboardRead\(\) \|\|/.test(appSrc) && !/return \(cc\.clipboardRead/.test(appSrc),

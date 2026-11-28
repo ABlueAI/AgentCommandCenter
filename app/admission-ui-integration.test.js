@@ -22,6 +22,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const vm = require('vm');
 
 const config = require('./admission-budget-config');
 const budgetModule = require('./admission-budget');
@@ -441,6 +442,50 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
       'the production launch transaction still issues exactly one ptyStart');
     assert(productionOpen.includes('if (admissionView) await admissionView.refresh();'),
       'no admission bridge means ordinary launches make no refresh IPC call');
+  }
+
+  section('(12c) the toolbar refreshes after natural exit and explicit pane close');
+  {
+    const appJs = fs.readFileSync(path.join(__dirname, 'renderer', 'app.js'), 'utf8').replace(/\r\n/g, '\n');
+    const mainJs = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8').replace(/\r\n/g, '\n');
+    const rendererExit = appJs.match(/^  cc\.onPtyExit\([\s\S]*?^  \}\);/m)[0];
+    const mainExit = mainJs.match(/^  p\.onExit\(\(\) => \{[\s\S]*?^  \}\);/m)[0];
+    const mainClose = mainJs.match(/^ipcMain\.on\('pty-kill',[\s\S]*?^\}\);/m)[0];
+    for (const pathName of ['natural exit', 'explicit close']) {
+      const s = makeStack();
+      s.budget.claimPane('pty1');
+      s.view.mount(); await s.view.refresh();
+      eq(s.send().disabled, false, `${pathName}: Send starts enabled`);
+      let rendererListener;
+      const terms = new Map([['pty1', { parser: { flush() {} }, term: { write() {}, options: {} } }]]);
+      vm.runInNewContext(rendererExit, {
+        cc: { onPtyExit: (cb) => { rendererListener = cb; } }, terms, admissionView: s.view,
+      });
+      const runMain = (code, extra) => vm.runInNewContext(code, {
+        id: 'pty1', ptys: s.panes, admissionEnabled: true, admissionBudget: s.budget,
+        admissionIpc: s.ipc, paneStatus: { notePaneExit() {}, releasePane() {} },
+        win: { isDestroyed: () => false, webContents: { send(channel, payload) {
+          if (channel === 'pty-exit') rendererListener(payload);
+        } } },
+        ...extra,
+      });
+      if (pathName === 'natural exit') {
+        runMain(mainExit, { p: { onExit: (cb) => cb() }, claudeSessionId: null });
+      } else {
+        terms.delete('pty1');
+        runMain(mainClose, {
+          ipcMain: { on: (_channel, cb) => cb(null, 'pty1') }, processTree: { killTree() {} },
+          videoScoutRunIds: { remove() {} }, stopPaneSession() {}, sessionMemoryMod: { STOP_REASON: {} },
+          ipcSenderRefusal: () => false,
+        });
+      }
+      await settle();
+      eq(s.view.snapshot().run.runState, 'closed', `${pathName}: the toolbar shows the closed run`);
+      eq(s.view.snapshot().run.paneBound, false, `${pathName}: the toolbar no longer shows the binding`);
+      eq(s.send().disabled, true, `${pathName}: Send is disabled as soon as the run closes`);
+      assert(s.host.textContent.includes('2 of 2 unused turn(s) voided'),
+        `${pathName}: the toolbar labels the remaining allowance as voided`);
+    }
   }
 
   // ---- (13) live ledger access failure writes NOTHING -------------------------------------------

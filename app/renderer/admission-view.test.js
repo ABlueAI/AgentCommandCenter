@@ -218,6 +218,26 @@ function harness(opts = {}) {
     eq(h.view.snapshot().inFlight, false, 'in-flight clears afterwards');
   }
 
+  process.stdout.write('\n(5b) successful sends preserve edits made while waiting\n');
+  {
+    for (const nextDraft of ['next prompt', 'submitted prompt']) {
+      let complete;
+      const h = harness({ submitPrompt: () => new Promise((resolve) => { complete = resolve; }) });
+      h.view.mount(); await h.view.refresh();
+      h.input().value = 'submitted prompt';
+      h.input().oninput();
+      const pending = h.view.submit();
+      h.input().value = 'some edits';
+      h.input().oninput();
+      h.input().value = nextDraft;
+      h.input().oninput();
+      complete({ ok: true, remaining: 2 });
+      eq(await pending, true, 'the original draft was sent successfully');
+      eq(h.calls.submit[0].prompt, 'submitted prompt', 'only the submitted draft was sent');
+      eq(h.input().value, nextDraft, 'success preserves later edits, including edits back to the submitted text');
+      eq(h.counter().textContent, `${nextDraft.length} / ${MAX_PROMPT_CHARS}`, 'the counter reflects the preserved draft');
+    }
+  }
   // -- 6. N+1 visibly refuses --------------------------------------------------------------------
   process.stdout.write('\n(6) N+1 VISIBLY refuses\n');
   {
@@ -317,6 +337,21 @@ function harness(opts = {}) {
 
   // -- 8. state refreshes after success AND refusal ----------------------------------------------
   process.stdout.write('\n(8) state REFRESHES after both success and refusal\n');
+  {
+    let completeEarlierRead;
+    let reads = 0;
+    const h = harness({ getState: () => {
+      if (++reads === 1) return new Promise((resolve) => { completeEarlierRead = resolve; });
+      return { ok: true, state: runState({ runState: 'closed', paneBound: false, paneId: null }) };
+    } });
+    h.view.mount();
+    const earlierRead = h.view.refresh();
+    await h.view.refresh();
+    completeEarlierRead({ ok: true, state: runState() });
+    await earlierRead;
+    eq(h.badge().textContent, 'RUN CLOSED', 'a late older refresh cannot reopen the displayed run');
+    eq(h.send().disabled, true, 'a late older refresh cannot re-enable Send');
+  }
   {
     const h = harness();
     h.view.mount();

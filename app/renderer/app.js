@@ -1578,6 +1578,17 @@ async function boot() {
   cc.getAgentTokenStatus().then(updateAgentTokenBanner)
     .catch(() => { updateAgentTokenBanner(null); appendLog('[agent token] status check failed\n'); });
   await refreshRepos();
+  cc.onPtyExit(async ({ id, closed }) => {
+    const t = terms.get(id);
+    if (t && !closed) {
+      t.term.options.disableStdin = true;
+      t.usageParser?.flush();
+      t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n');
+    }
+    if (admissionView) {
+      await admissionView.refresh().catch(() => appendLog('[admission-ui] refresh after pane exit failed\n'));
+    }
+  });
   wireUi();
   await quickLinksView.load();
   // Pull the controlled run's bounded counts once the bar exists. No-op with no run configured.
@@ -1593,14 +1604,6 @@ async function boot() {
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
     if (t) { t.term.write(data); t.usageParser?.feed(data); }
-  });
-  cc.onPtyExit(({ id }) => {
-    const t = terms.get(id);
-    if (t) {
-      t.term.options.disableStdin = true;
-      t.usageParser?.flush();
-      t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n');
-    }
   });
   cc.onClaudeVideoScoutEvent(handleClaudeVideoEvent);
   // S09: the main-error listener (top of boot) is up, so a session-memory refusal or a refused Resume is shown.
