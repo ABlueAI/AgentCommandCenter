@@ -1,5 +1,5 @@
 'use strict';
-// S06 PROCESS-TREE CLEANUP (pure; main.js injects child_process, the platform, env and the logger).
+// S06 PROCESS-TREE CLEANUP (pure; main.js injects the helper launcher, platform and logger).
 //
 // The 1.0 limitation (docs/RELEASE-NOTES-1.0.md, "Leftover processes"): closing a pane or Mako could
 // leave claude.exe or node.exe running. node-pty's Windows kill() lists the console's processes from
@@ -14,16 +14,7 @@
 // taskkill.exe in a worktree can't be picked up), with execFile (no shell), and every PID must be a
 // positive safe integer. A process whose parent already exited is no longer in the tree; that gap is
 // recorded in the S06 PR. Every outcome is logged; nothing is swallowed silently.
-const path = require('path');
-
 function isPid(value) { return Number.isSafeInteger(value) && value > 0; }
-
-// %SystemRoot%\System32\taskkill.exe, or null when SystemRoot isn't an absolute Windows path.
-function taskkillPath(env) {
-  const root = env && (env.SystemRoot || env.SYSTEMROOT || env.windir);
-  if (typeof root !== 'string' || !path.win32.isAbsolute(root) || root.startsWith('\\\\')) return null;
-  return path.win32.join(root, 'System32', 'taskkill.exe');
-}
 
 // ['/T', '/F', '/PID', '123', '/PID', '456'], or null when no valid PID is given.
 function taskkillArgs(pids) {
@@ -36,7 +27,7 @@ function taskkillArgs(pids) {
 
 function createProcessTreeKiller(deps) {
   const platform = deps && deps.platform;
-  const env = (deps && deps.env) || {};
+  const resolveTaskkill = deps && deps.resolveTaskkill;
   const execFile = deps && deps.execFile;
   const execFileSync = deps && deps.execFileSync;
   const log = (deps && deps.log) || (() => {});
@@ -45,13 +36,12 @@ function createProcessTreeKiller(deps) {
     throw new Error('process-tree: execFile and execFileSync must be functions.');
   }
   const windows = platform === 'win32';
-  const exe = windows ? taskkillPath(env) : null;
+  if (windows && typeof resolveTaskkill !== 'function') throw new Error('process-tree: resolveTaskkill is required.');
   const opts = { windowsHide: true };
 
   // Returns { args } when taskkill should run, or { skip } with a constant reason.
   function plan(pids) {
     if (!windows) return { skip: 'not-windows' };
-    if (!exe) return { skip: 'taskkill-path-unresolved' };
     const args = taskkillArgs(pids);
     if (!args) return { skip: 'no-valid-pid' };
     return { args };
@@ -75,7 +65,7 @@ function createProcessTreeKiller(deps) {
       return;
     }
     try {
-      execFile(exe, p.args, Object.assign({ timeout: 5000 }, opts), (err) => { note('pane close', 1, err); finish(); });
+      execFile(resolveTaskkill(), p.args, Object.assign({ timeout: 5000 }, opts), (err) => { note('pane close', 1, err); finish(); });
     } catch (err) {
       note('pane close', 1, err);
       finish();
@@ -92,7 +82,7 @@ function createProcessTreeKiller(deps) {
     }
     const count = (p.args.length - 2) / 2;
     try {
-      execFileSync(exe, p.args, Object.assign({ timeout: timeoutMs || 5000, stdio: 'ignore' }, opts));
+      execFileSync(resolveTaskkill(), p.args, Object.assign({ timeout: timeoutMs || 5000, stdio: 'ignore' }, opts));
       note('shutdown', count, null);
     } catch (err) {
       note('shutdown', count, err);
@@ -102,4 +92,4 @@ function createProcessTreeKiller(deps) {
   return { killTree, killTreesSync };
 }
 
-module.exports = { createProcessTreeKiller, taskkillArgs, taskkillPath };
+module.exports = { createProcessTreeKiller, taskkillArgs };

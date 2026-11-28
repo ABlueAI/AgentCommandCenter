@@ -27,7 +27,7 @@ function makeIpc(over) {
     assessSender: (over && over.assessSender) || (() => ({ ok: true })),
     authorize: (over && over.authorize) || (() => ({ ok: true, dir: REAL_DIR })),
     resolveVscode: (over && over.resolveVscode) || (() => ({ ok: true, exe: VS_EXE })),
-    resolveTerminal: (over && over.resolveTerminal) || (() => WT_EXE),
+    resolveTerminal: (over && over.resolveTerminal) || (() => ({ ok: true, exe: WT_EXE })),
     launch: (cmd, args) => launched.push({ cmd, args }),
     logRefusal: (line) => logs.push(line),
   });
@@ -81,10 +81,18 @@ for (const method of ['handleOpenVscode', 'handleOpenTerminal']) {
 
 // --- VS Code executable not found: ZERO children ------------------------------------------------
 {
-  const { ipc, launched, logs } = makeIpc({ resolveVscode: () => ({ ok: false, reason: 'vscode-not-found' }) });
+  const { ipc, launched, logs } = makeIpc({ resolveVscode: () => ({ ok: false, reason: 'code-not-found' }) });
   ipc.handleOpenVscode({}, SECRET_DIR);
   assert(launched.length === 0, 'open-vscode with no resolvable Code.exe spawns ZERO child processes');
-  assert(logs.length === 1 && /vscode-not-found/.test(logs[0]), 'open-vscode refuses visibly with vscode-not-found');
+  assert(logs.length === 1 && /code-not-found/.test(logs[0]), 'open-vscode refuses visibly with code-not-found');
+}
+
+// --- Windows Terminal not installed: ZERO children ----------------------------------------------
+{
+  const { ipc, launched, logs } = makeIpc({ resolveTerminal: () => ({ ok: false, reason: 'wt-not-found' }) });
+  ipc.handleOpenTerminal({}, SECRET_DIR);
+  assert(launched.length === 0, 'open-terminal with no resolvable wt.exe spawns ZERO child processes');
+  assert(logs.length === 1 && /wt-not-found/.test(logs[0]), 'open-terminal refuses visibly with wt-not-found');
 }
 
 // --- ordering: the sender gate runs BEFORE authorization (a bad sender never triggers authorize) -

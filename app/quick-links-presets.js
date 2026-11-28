@@ -2,9 +2,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const helpers = require('./helper-programs');
 const policy = require('./quick-links-policy');
-const { resolveFirefoxExe } = require('./launchers');
 
 const FILE = 'quick-links-presets.json';
 const PROFILE = 'Mako';
@@ -87,7 +86,10 @@ function verifyProfile(root) {
   return refuse('firefox-profile-missing');
 }
 
-function createQuickLinksPresets({ settingsDir, appData, env = process.env, isWin = process.platform === 'win32', spawnFirefox = spawn }) {
+function createQuickLinksPresets({
+  settingsDir, appData, isWin = process.platform === 'win32',
+  resolveFirefox = () => helpers.resolve('firefox'), spawnFirefox = helpers.spawn,
+}) {
   const file = path.join(settingsDir, FILE);
 
   function list() {
@@ -107,7 +109,7 @@ function createQuickLinksPresets({ settingsDir, appData, env = process.env, isWi
     if (!isWin) return refuse('firefox-platform-unsupported');
     const profile = verifyProfile(path.join(appData, 'Mozilla', 'Firefox'));
     if (!profile.ok) return profile;
-    const firefox = resolveFirefoxExe({ env, isFile: (filePath) => fs.statSync(filePath, { throwIfNoEntry: false })?.isFile() });
+    const firefox = resolveFirefox();
     if (!firefox.ok) return firefox;
     const args = ['-P', PROFILE, ...preset.urls.flatMap((url) => ['-new-tab', url])];
     try {

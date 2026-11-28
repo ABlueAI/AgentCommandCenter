@@ -225,6 +225,7 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
     versionMod.SOURCE_TAG + 'C:\\Users\\acceptance\\.local\\bin\\claude.exe\r\n'
     + versionMod.VERSION_TAG + versionText + '\r\n';
   const resolverFor = (versionText) => versionMod.createClaudeVersionResolver({
+    resolvePowerShell: () => process.execPath,
     execFile: (_exe, _args, _opts, cb) => cb(null, tagged(versionText)),
     env: {},
     commandName: 'claude',

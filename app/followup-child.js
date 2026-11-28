@@ -20,7 +20,7 @@
 //
 // PURE of Electron: deps inject spawnImpl/execPath/env for unit tests (followup-child.test.js).
 
-const { spawn } = require('child_process');
+const { spawn } = require('./helper-programs');
 
 const FOLLOWUP_CHILD_STDOUT_MAX = 2 * 1024 * 1024;   // bytes
 const FOLLOWUP_CHILD_STDERR_MAX = 64 * 1024;         // bytes

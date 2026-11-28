@@ -16,7 +16,7 @@ const IPC_REASON = Object.freeze({
 const TRUST_REASONS = Object.freeze([
   'no-trusted-window', 'untrusted-sender', 'not-main-frame', 'untrusted-document',
 ]);
-// S55 Firefox preset refusals (quick-links-presets.js and launchers.js resolveFirefoxExe).
+// S55 Firefox preset refusals (quick-links-presets.js and helper-programs.js).
 const PRESET_REASONS = Object.freeze([
   'presets-file-missing', 'presets-file-not-regular', 'presets-file-unreadable', 'presets-invalid-utf8',
   'presets-invalid', 'preset-urls-invalid', 'preset-https-required',

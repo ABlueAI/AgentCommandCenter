@@ -11,13 +11,14 @@
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Task,
-    [string]$Base = "main"
+    [string]$Base = "main",
+    [string]$GitExe = "git"
 )
 $ErrorActionPreference = "Stop"
 
 # Must be inside a git repo
-$repoRoot = (git rev-parse --show-toplevel 2>$null)
-if (-not $repoRoot) { throw "Not inside a git repository. cd into your project repo first." }
+$repoRoot = (& $GitExe rev-parse --show-toplevel 2>$null)
+if ($LASTEXITCODE -ne 0 -or -not $repoRoot) { throw "Not inside a git repository. cd into your project repo first." }
 
 $repoName     = Split-Path $repoRoot -Leaf
 $branch       = "agent/$Task"
@@ -31,12 +32,15 @@ if (Test-Path $worktreePath) {
 
 # If the branch already exists (e.g. a prior agent was removed but its branch was preserved),
 # attach that branch to the new worktree instead of trying to re-create it.
-$branchExists = git branch --list $branch
+$branchExists = & $GitExe branch --list $branch
+if ($LASTEXITCODE -ne 0) { throw "Could not check the worktree branch." }
 if ($branchExists) {
-    git worktree add $worktreePath $branch
+    & $GitExe worktree add $worktreePath $branch
 } else {
-    git worktree add -b $branch $worktreePath $Base
+    & $GitExe worktree add -b $branch $worktreePath $Base
 }
+
+if ($LASTEXITCODE -ne 0) { throw "Could not create the worktree." }
 
 Write-Host ""
 Write-Host "Agent worktree ready:" -ForegroundColor Green

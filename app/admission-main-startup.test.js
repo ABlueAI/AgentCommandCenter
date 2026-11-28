@@ -142,7 +142,13 @@ async function bootMain(admissionEnv, options) {
   Module._load = function (request, parent) {
     if (request === 'electron') return electronStub;
     if (request === '@lydell/node-pty') return ptyStub;
-    if (opt.childProcess && request === 'child_process' && parent.filename === MAIN_PATH) return opt.childProcess;
+    if (opt.childProcess && request === './helper-programs' && parent.filename === MAIN_PATH) {
+      const helpers = realLoad.apply(this, arguments).createHelperPrograms({ childProcess: opt.childProcess });
+      return {
+        ...helpers,
+        path: (name) => name === 'powershell' && opt.powershell ? opt.powershell : helpers.path(name),
+      };
+    }
     return realLoad.apply(this, arguments);
   };
 
@@ -557,6 +563,7 @@ const LEDGER = 'admission-ledger.json';
   section('(9) trusted sender at every registered IPC channel, settings, and review diff');
   {
     const gitCalls = [];
+    const powershellCalls = [];
     // The review fixture uses real Git. The stubs record only main's calls and prevent any other
     // child process from running during the all-channel sweep.
     const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-ipc-'));
@@ -566,7 +573,10 @@ const LEDGER = 'admission-ledger.json';
     const outside = path.join(fixture, 'outside');
     const settingsPath = path.join(fixture, 'settings.json');
     const diffFile = path.join(worktree, '.agent-review.diff');
-    const realGit = (args) => childProcess.execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const helpers = require('./helper-programs');
+    const gitExe = helpers.path('git');
+    const powershell = process.platform === 'win32' ? helpers.path('powershell') : process.execPath;
+    const realGit = (args) => childProcess.execFileSync(gitExe, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     try {
       for (const dir of [repo, outside]) fs.mkdirSync(dir, { recursive: true });
       realGit(['-C', repo, 'init', '-b', 'main']);
@@ -578,15 +588,20 @@ const LEDGER = 'admission-ledger.json';
       const initialSettings = { projectsRoot: projects, selectedRepo: repo, legacySetting: 'retained' };
       fs.writeFileSync(settingsPath, JSON.stringify(initialSettings));
       let allowReviewGit = false;
-      const r = await bootMain(VALID_ENV, { userDataDir: fixture, childProcess: {
+      const r = await bootMain(VALID_ENV, { userDataDir: fixture, powershell, childProcess: {
         execFile(file, args, options, callback) {
+          if (file === powershell) {
+            powershellCalls.push({ args, options });
+            callback(Object.assign(new Error('worktree script failed'), { code: 1 }), '');
+            return;
+          }
           gitCalls.push(args);
-          if (allowReviewGit && file === 'git') return childProcess.execFile(file, args, options, callback);
+          if (allowReviewGit && file === gitExe) return childProcess.execFile(file, args, options, callback);
           callback(new Error('Unexpected subprocess in the IPC sweep'), '');
         },
         execFileSync(file, args) {
           gitCalls.push(args);
-          if (allowReviewGit && file === 'git') return realGit(args);
+          if (allowReviewGit && file === gitExe) return realGit(args);
           throw new Error('Unexpected subprocess in the IPC sweep');
         },
       } });
@@ -623,10 +638,20 @@ const LEDGER = 'admission-ledger.json';
           }
         }
       }
-      assert(gitCalls.length === 0 && r.record.ptySpawns === 0, 'refused senders start no subprocesses');
+      assert(gitCalls.length === 0 && powershellCalls.length === 0 && r.record.ptySpawns === 0, 'refused senders start no subprocesses');
 
       const sender = r.record.webContents;
       const trusted = { sender, senderFrame: sender.mainFrame };
+      fs.mkdirSync(path.join(projects, 'repo-review'));
+      const failedWorktree = { repo, task: 'review' };
+      for (const channel of ['new-agent', 'remove-agent']) {
+        const result = await r.record.handled.get(channel)(trusted, failedWorktree);
+        assert(result.ok === false && typeof result.error === 'string' && result.error.length > 0,
+          `${channel} reports a failed helper instead of accepting an existing worktree as success`);
+      }
+      assert(powershellCalls.length === 2 && powershellCalls.every(({ args, options }) =>
+        args.includes('-File') && args[args.indexOf('-GitExe') + 1] === gitExe && options.shell === false),
+      'both worktree scripts receive the resolved Git executable as one argument');
       const saveSettings = r.record.handled.get('save-settings');
       let saveError;
       try { await saveSettings(trusted, { theme: 'obsidian', unexpectedSetting: true }); }

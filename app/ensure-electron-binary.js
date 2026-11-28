@@ -12,7 +12,7 @@
 // "postinstall", so this still runs under `npm ci` (checked with npm 11.16.0 on 2026-10-18).
 // `--ignore-scripts` skips it; electron-binary.test.js then fails at the top of `npm test`.
 
-const { spawnSync } = require('child_process');
+const { spawnSync } = require('./helper-programs');
 const fs = require('fs');
 const path = require('path');
 

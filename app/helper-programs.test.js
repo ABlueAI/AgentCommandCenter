@@ -97,3 +97,47 @@ test('the launch boundary rejects bare names and shell options and preserves dis
   helpers.execFile(fullPath, args, { windowsHide: true }, cb);
   assert.deepEqual(calls, [['execFile', fullPath, args, { windowsHide: true, shell: false }, cb]]);
 });
+
+test('installed launchers and media tools resolve from fixed per-user locations', () => {
+  const { createHelperPrograms } = require('./helper-programs');
+  const expected = {
+    code: 'X:\\Local\\Programs\\Microsoft VS Code\\Code.exe',
+    wt: 'X:\\Local\\Microsoft\\WindowsApps\\wt.exe',
+    firefox: 'Y:\\Programs\\Mozilla Firefox\\firefox.exe',
+    claude: 'X:\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe',
+    ffmpeg: 'X:\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.exe',
+    ffprobe: 'X:\\Local\\Microsoft\\WinGet\\Links\\ffprobe.exe',
+    'yt-dlp': 'X:\\Local\\Microsoft\\WinGet\\Links\\yt-dlp.exe',
+  };
+  const helpers = createHelperPrograms({
+    platform: 'win32',
+    env: { localappdata: 'X:\\Local', APPDATA: 'X:\\Roaming', PROGRAMFILES: 'Y:\\Programs' },
+    isExecutable: (file) => Object.values(expected).includes(file),
+  });
+  for (const [name, file] of Object.entries(expected)) assert.equal(helpers.path(name), file);
+});
+
+test('an unreadable install gives a stable refusal without selecting a later candidate', () => {
+  const { createHelperPrograms } = require('./helper-programs');
+  const checks = [];
+  const helpers = createHelperPrograms({
+    platform: 'win32',
+    env: { ProgramFiles: 'X:\\Programs' },
+    isExecutable(file) {
+      checks.push(file);
+      throw Object.assign(new Error('installation unreadable'), { code: 'EACCES' });
+    },
+  });
+  assert.throws(() => helpers.path('git'), { code: 'git-executable-unreadable' });
+  assert.throws(() => helpers.path('git'), { code: 'git-executable-unreadable' });
+  assert.deepEqual(checks, ['X:\\Programs\\Git\\cmd\\git.exe']);
+});
+
+test('the boundary launches this runtime and round-trips argv without shell parsing', () => {
+  const { execFileSync } = require('./helper-programs');
+  const args = ['two words', 'percent % sign', 'one & two', 'quote " inside', 'trailing slash\\', ''];
+  const stdout = execFileSync(process.execPath, [
+    '-e', 'process.stdout.write(JSON.stringify(process.argv.slice(1)))', '--', ...args,
+  ], { encoding: 'utf8' });
+  assert.deepEqual(JSON.parse(stdout), args);
+});

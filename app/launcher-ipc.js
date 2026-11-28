@@ -12,7 +12,7 @@ function createLauncherIpc(deps) {
   const assessSender = deps && deps.assessSender;       // (event) => { ok, reason? }
   const authorize = deps && deps.authorize;             // (rawDir) => { ok, dir?, reason? }
   const resolveVscode = deps && deps.resolveVscode;     // () => { ok, exe?, reason? }
-  const resolveTerminal = deps && deps.resolveTerminal; // () => exe string
+  const resolveTerminal = deps && deps.resolveTerminal; // () => { ok, exe?, reason? }
   const launch = deps && deps.launch;                   // (cmd, args, onError) => void
   const logRefusal = (deps && deps.logRefusal) || (() => {});
   for (const [name, fn] of [
@@ -42,7 +42,8 @@ function createLauncherIpc(deps) {
     const a = authorize(rawDir);
     if (!a.ok) return refuse('Open Terminal', a.reason);
     const exe = resolveTerminal();
-    const s = openTerminalSpec(exe, a.dir);
+    if (!exe.ok) return refuse('Open Terminal', exe.reason);
+    const s = openTerminalSpec(exe.exe, a.dir);
     launch(s.cmd, s.args, (err) => refuse('Open Terminal', `spawn-failed (${(err && err.code) || 'error'})`));
     return undefined;
   }

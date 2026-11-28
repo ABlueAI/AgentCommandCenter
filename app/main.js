@@ -7,7 +7,7 @@ const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage, clipbo
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
-const { spawn, execFile, execFileSync } = require('child_process');
+const helpers = require('./helper-programs');
 const crypto = require('crypto');
 const pty = require('@lydell/node-pty'); // prebuilt ConPTY — powers in-app terminals
 // Video-scout's Gemini model/media-resolution options are untrusted IPC input, same posture as
@@ -32,7 +32,6 @@ const { createNavGuards } = require('./nav-guard');
 // only the current repo root or one of its live git worktrees). Both dependency-free + unit-tested
 // (launchers.test.js / launcher-authz.test.js); the byte-invariance of the fenced-role gate + the
 // whole pty-start handler is asserted by launcher-fence-invariant.test.js.
-const { resolveVscodeExe, resolveTerminalExe } = require('./launchers');
 const { createLauncherAuthorizer } = require('./launcher-authz');
 // The launcher IPC boundary: gate -> authorize -> resolve exe -> shell-free spawn. Pure + unit-tested
 // (launcher-ipc.test.js); an untrusted sender or unauthorized dir spawns zero children.
@@ -74,7 +73,6 @@ const paneStatusShim = require('./pane-status/pane-status-runtime-shim');
 // natively-confirmed stale-lock liveness check (dependency B). Both are injected into the controller
 // below and nowhere else; no provider-event path can reach either.
 const paneStatusVersionMod = require('./pane-status/pane-status-version');
-const paneStatusLockMod = require('./pane-status/pane-status-lock');
 // MAIN-OWNED TURN ADMISSION BUDGET — Blue's turn-accounting OUTCOME B. For a controlled live evidence
 // run, main owns a durable per-pane allowance: direct terminal input to the controlled pane is blocked
 // here, and a paid prompt reaches the PTY only through the narrow controlled-submission handler, which
@@ -100,7 +98,8 @@ const { isAgentToken, isAgentPane, normalizeAgentToken } = require('./agent-git-
 // S06: kill a pane's whole process tree (taskkill /T) before pty.kill(); see process-tree.js.
 const { createProcessTreeKiller } = require('./process-tree');
 const processTree = createProcessTreeKiller({
-  platform: process.platform, env: process.env, execFile, execFileSync,
+  platform: process.platform, resolveTaskkill: () => helpers.path('taskkill'),
+  execFile: helpers.execFile, execFileSync: helpers.execFileSync,
   log: (line) => tlog(line),
 });
 const { createAdmissionBudget, REASON: ADMISSION_REASON } = require('./admission-budget');
@@ -254,18 +253,21 @@ const LIBRARY_MAX_BUFFER = 32 * 1024 * 1024;   // bounded stdout/stderr (a 4 MiB
 
 // Run the V5b2 library PowerShell boundary shell-free (execFile) and parse its JSON-only stdout.
 // -RunRoot is the fixed main-owned root; -RunId (Read only) is a main-issued identity. The script
-// always prints one JSON document even on internal error, so a parse failure is the only "reject".
+// reports application-level errors as JSON. Launch and transport errors reject the request.
 function runLibraryAction({ action, runId }) {
   return new Promise((resolve, reject) => {
     const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', LIBRARY_SCRIPT,
       '-Action', action, '-RunRoot', VIDEO_SCOUT_RUN_ROOT];
     if (action === 'Read') args.push('-RunId', String(runId == null ? '' : runId));
-    execFile('powershell', args,
+    helpers.execFile(helpers.path('powershell'), args,
       { timeout: LIBRARY_TIMEOUT_MS, maxBuffer: LIBRARY_MAX_BUFFER, windowsHide: true, encoding: 'buffer' },
-      (_err, stdout) => {
+      (error, stdout) => {
         const text = Buffer.isBuffer(stdout) ? stdout.toString('utf8') : String(stdout || '');
         let parsed = null;
-        try { parsed = JSON.parse(text); } catch { parsed = null; }
+        try { parsed = JSON.parse(text); } catch { /* reported below */ }
+        if (error && !(error.code === 1 && !error.killed && parsed?.ok === false)) {
+          return reject(new Error(`library: ${helperError(error)}`));
+        }
         if (parsed && typeof parsed === 'object') return resolve(parsed);
         return reject(new Error('library: no JSON on stdout'));
       });
@@ -745,64 +747,39 @@ app.whenReady().then(() => {
     net: require('net'),
     crypto,
     randomToken: () => crypto.randomBytes(32).toString('hex'),
-    // Dependency A. THE VERSION GATE MUST PROBE THE SAME `claude` THE PANE LAUNCHES.
-    //
-    // CORRECTED (advisory review, finding 3). This used to be `execFile('claude', ['--version'])`
-    // straight from Electron main, which resolves against MAIN'S PATH. The pane, by contrast, is a
-    // PowerShell PTY launched with -NoLogo -ExecutionPolicy Bypass -NoExit, and it LOADS THE USER'S
-    // POWERSHELL PROFILE — which can prepend to PATH or define a `claude` function. Those two
-    // resolutions can name different executables; the reviewed prototype recorded exactly that
-    // happening on this machine, so main's answer was never evidence about the pane's binary.
-    //
-    // (The spawn call itself is deliberately NOT reproduced in this comment. A source-order
-    //  assertion in admission-budget.test.js locates the real pty.spawn by its literal text, and a
-    //  comment containing that text would be found first and make the assertion measure the wrong
-    //  line — a defect this branch already caused once.)
-    //
-    // The resolver below runs ONE PowerShell process with the pane's flags minus `-NoExit`, resolves
-    // the bare name with Get-Command inside it, and invokes THAT resolved source for `--version`. No
-    // `-NoProfile`: the pane loads the profile, so the probe must too. Fail-closed at every branch —
-    // not found, empty source, timeout, nonzero exit, unparseable output — leaves the version null and
-    // every badge `unknown`/`version-mismatch`.
+    // Dependency A. Probe the provider inside a system PowerShell with the pane's flags and
+    // profile. The command resolved inside that profile determines the advisory badge.
     resolveVersion: () => paneStatusVersionMod.createClaudeVersionResolver({
-      execFile: require('child_process').execFile,
-      // The PATH/PATHEXT the PTY will inherit. Unfenced construction removes only admission keys;
-      // fenced construction copies both names case-insensitively with their exact values. Command
-      // resolution therefore stays identical even though fenced PTYs omit every unrelated ambient
-      // entry by construction.
+      execFile: helpers.execFile,
+      resolvePowerShell: () => helpers.path('powershell'),
       env: process.env,
       commandName: AGENT_CMD.claude,
       log: (line) => tlog(line),
     }).discover(),
-    // Dependency B. PID plus PROCESS START TIME, because a recycled PID is otherwise indistinguishable
-    // from the original lock owner. Anything it cannot determine becomes a conservative refusal.
-    //
-    // CORRECTED (advisory review, finding 7). The executable used to be selected by
-    // `process.env.ComSpec ? 'powershell.exe' : 'powershell.exe'` — a ternary whose branches are
-    // identical, so it consulted an environment variable and then ignored it, and handed a BARE NAME
-    // to execFile either way. A bare name is resolved through PATH. This one is resolved to a bounded
-    // absolute path under the validated system directory, and if it is not there the answer is
-    // "liveness unknown", which the lock turns into a refusal to clear.
+    // Dependency B. PID plus process start time distinguishes a recycled PID from the lock owner.
+    // An unsuccessful probe is reported as unknown so lock recovery refuses.
     resolveProcessStartTime: (pid) => new Promise((resolve) => {
-      const ps = paneStatusLockMod.resolveWindowsPowerShellPath(process.env);
-      if (!ps.ok) { tlog(`[pane-status] liveness resolver unavailable (${ps.reason})`); return resolve({ ok: false }); }
+      const failed = (reason) => {
+        reportIpcRefusal('pane-status liveness', reason);
+        resolve({ ok: false });
+      };
       try {
-        require('child_process').execFile(
-          ps.path,
+        helpers.execFile(
+          helpers.path('powershell'),
           ['-NoProfile', '-NonInteractive', '-Command',
             `$p = Get-Process -Id ${Number(pid)} -ErrorAction SilentlyContinue; ` +
             'if ($p) { "RUNNING " + [int64]($p.StartTime.ToUniversalTime() - [datetime]"1970-01-01").TotalMilliseconds } else { "GONE" }'],
-          { windowsHide: true, timeout: 15000, shell: false },
+          { windowsHide: true, timeout: 15000 },
           (err, stdout) => {
-            if (err) return resolve({ ok: false });
+            if (err) return failed(helperError(err));
             const out = String(stdout || '').trim();
             if (out === 'GONE') return resolve({ ok: true, running: false });
             const m = /^RUNNING\s+(\d+)$/.exec(out);
-            if (!m) return resolve({ ok: false });
+            if (!m) return failed('unrecognized-output');
             resolve({ ok: true, running: true, startTimeMs: Number(m[1]) });
           },
         );
-      } catch { resolve({ ok: false }); }
+      } catch (error) { failed(helperError(error)); }
     }),
     publishView: (view) => {
       const delivered = paneStatusPublishers.publishView(view);
@@ -1078,10 +1055,23 @@ app.on('window-all-closed', () => {
 });
 
 // ---- helpers ----------------------------------------------------------------
-function git(args, cwd) {
-  return new Promise((resolve) => {
-    execFile('git', args, { cwd }, (_err, stdout) => resolve((stdout || '').trim()));
+function helperError(error) {
+  if (Number.isInteger(error?.code)) return `exit-${error.code}`;
+  const code = String(error?.code ?? 'unknown-error');
+  return /^[a-z0-9-]{1,48}$/i.test(code) ? code : 'unknown-error';
+}
+
+function runHelper(name, args, options) {
+  return new Promise((resolve, reject) => {
+    helpers.execFile(helpers.path(name), args, options, (error, stdout) => {
+      if (error) reject(error);
+      else resolve(stdout);
+    });
   });
+}
+
+async function git(args, cwd) {
+  return (await runHelper('git', args, { cwd, windowsHide: true })).trim();
 }
 // Launch a detached external process (Windows Terminal, VS Code) and don't block. shell:false is
 // EXPLICIT and load-bearing (P12): callers resolve a real executable (Code.exe / wt.exe) and pass the
@@ -1091,7 +1081,7 @@ function git(args, cwd) {
 function launch(cmd, args, onError) {
   let child;
   try {
-    child = spawn(cmd, args, { detached: true, shell: false, windowsHide: false });
+    child = helpers.spawn(cmd, args, { detached: true, shell: false, windowsHide: false });
   } catch (e) {
     if (typeof onError === 'function') onError(e);
     return;
@@ -1169,7 +1159,10 @@ handleTrustedIpc('build-info', () => {
     buildInfoPromise = readBuildInfo({
       version: require('./package.json').version,
       instanceTag: instanceProfile.buildLabelTag,
-      runGit: (args) => git(args, __dirname),
+      runGit: (args) => git(args, __dirname).catch((error) => {
+        reportIpcRefusal('build-info', helperError(error));
+        throw error;
+      }),
     });
   }
   return buildInfoPromise;
@@ -1228,7 +1221,10 @@ handleTrustedIpc('list-repos', async () => {
 handleTrustedIpc('list-worktrees', async (repo) => {
   if (!repo) return [];
   tlog('list-worktrees: git worktree list START');
-  const out = await git(['worktree', 'list', '--porcelain'], repo);
+  const out = await git(['worktree', 'list', '--porcelain'], repo).catch((error) => {
+    reportIpcRefusal('list-worktrees', helperError(error));
+    return '';
+  });
   tlog('list-worktrees: git worktree list END');
   const items = [];
   let cur = {};
@@ -1242,7 +1238,13 @@ handleTrustedIpc('list-worktrees', async (repo) => {
   return items;
 });
 
-handleTrustedIpc('repo-github-url', async (repo) => remoteToHttps(await git(['remote', 'get-url', 'origin'], repo)));
+handleTrustedIpc('repo-github-url', async (repo) => {
+  try { return remoteToHttps(await git(['remote', 'get-url', 'origin'], repo)); }
+  catch (error) {
+    reportIpcRefusal('repo-github-url', helperError(error));
+    return '';
+  }
+});
 
 // ---- IPC: agents ------------------------------------------------------------
 // Create a worktree (via the repo's own new-agent.ps1) and launch the chosen agent in a WT tab.
@@ -1260,19 +1262,15 @@ handleTrustedIpc('new-agent', async ({ repo, task }) => {
   // Worktree path follows the <repo>-<task> sibling convention the scripts use.
   const wt = path.join(path.dirname(repo), `${path.basename(repo)}-${task}`);
   const branch = `agent/${task}`;
-  tlog('new-agent: execFile powershell new-agent.ps1 START');
-  const out = await new Promise((resolve) => {
-    execFile('powershell',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task],
-      { cwd: repo }, (err, stdout, stderr) => resolve({ err, stdout, stderr }));
-  });
-  tlog('new-agent: execFile powershell new-agent.ps1 END');
-  // Don't claim success unless the folder really exists — otherwise the renderer would try
-  // to launch a PTY into a missing dir (Windows error 267) and crash the app.
+  try {
+    await runHelper('powershell', [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task, '-GitExe', helpers.path('git'),
+    ], { cwd: repo, windowsHide: true });
+  } catch (error) {
+    return { ok: false, error: reportIpcRefusal('new-agent', helperError(error)), worktree: wt, branch };
+  }
   if (!fs.existsSync(wt)) {
-    const error = ((out.stderr || (out.err && out.err.message) || 'worktree was not created') + '').trim();
-    tlog(`new-agent: FAIL worktree missing: ${error}`);
-    return { ok: false, error, worktree: wt, branch };
+    return { ok: false, error: reportIpcRefusal('new-agent', 'worktree was not created'), worktree: wt, branch };
   }
   tlog('new-agent: END ok');
   return { ok: true, worktree: wt, branch };
@@ -1305,12 +1303,14 @@ handleTrustedIpc('remove-agent', async ({ repo, task }) => {
     return { ok: false, error: msg };
   }
   const script = path.join(SCRIPTS_DIR, 'remove-agent.ps1');
-  await new Promise((resolve) => {
-    execFile('powershell',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task, '-Force'],
-      { cwd: repo }, () => resolve());
-  });
-  return { ok: true };  // normalized contract: { ok, error? } — matches new-agent / the refusal above (L3)
+  try {
+    await runHelper('powershell', [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task, '-Force', '-GitExe', helpers.path('git'),
+    ], { cwd: repo, windowsHide: true });
+  } catch (error) {
+    return { ok: false, error: reportIpcRefusal('remove-agent', helperError(error)) };
+  }
+  return { ok: true };
 });
 
 // Create a dedicated, fenced outputs sandbox for a research role (web-scout/operator) so it
@@ -1534,19 +1534,22 @@ handleTrustedIpc('review-diff', async (request) => {
     return { ok: false, error: 'invalid-base-ref' };
   }
   // Let Git check the complete ref grammar, including slash-separated names and single names.
-  const refError = await new Promise((resolve) => {
-    execFile('git', ['check-ref-format', '--allow-onelevel', base], { windowsHide: true }, resolve);
-  });
-  if (refError) {
-    return { ok: false, error: refError.code === 1 ? 'invalid-base-ref' : 'git-ref-check-failed' };
+  try { await runHelper('git', ['check-ref-format', '--allow-onelevel', base], { windowsHide: true }); }
+  catch (error) {
+    if (error.code === 1) return { ok: false, error: 'invalid-base-ref' };
+    reportIpcRefusal('review-diff ref check', helperError(error));
+    return { ok: false, error: 'git-ref-check-failed' };
   }
   const authorized = launcherAuthorizer.authorize(worktree);
   if (!authorized.ok) return { ok: false, error: authorized.reason };
-  const { error, diff } = await new Promise((resolve) => {
-    execFile('git', ['-C', authorized.dir, 'diff', '--end-of-options', base, '--'],
-      { maxBuffer: 1024 * 1024 * 32 }, (error, diff) => resolve({ error, diff }));
-  });
-  if (error) return { ok: false, error: 'git-diff-failed' };
+  let diff;
+  try {
+    diff = await runHelper('git', ['-C', authorized.dir, 'diff', '--end-of-options', base, '--'],
+      { maxBuffer: 1024 * 1024 * 32, windowsHide: true });
+  } catch (error) {
+    reportIpcRefusal('review-diff', helperError(error));
+    return { ok: false, error: 'git-diff-failed' };
+  }
   const fileName = '.agent-review.diff';
   const file = path.join(authorized.dir, fileName);
   if (!diff.trim()) return { ok: true, empty: true, fileName };
@@ -1577,9 +1580,9 @@ function listLauncherAuthorizedDirs() {
     dirs.push(repo); // the repo root itself (also git's first worktree entry — kept if git fails)
     let out = '';
     try {
-      out = execFileSync('git', ['-C', repo, 'worktree', 'list', '--porcelain'],
+      out = helpers.execFileSync(helpers.path('git'), ['-C', repo, 'worktree', 'list', '--porcelain'],
         { encoding: 'utf8', timeout: 10000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }) || '';
-    } catch { out = ''; }
+    } catch (error) { reportIpcRefusal('launcher worktree enumeration', helperError(error)); }
     for (const line of out.split('\n')) {
       if (line.startsWith('worktree ')) { const wp = line.slice(9).trim(); if (wp) dirs.push(wp); }
     }
@@ -1637,7 +1640,7 @@ function probeManagedRegistryKey(key) {
   const parentKey = parts.slice(0, -1).join('\\');
   const parentLine = [hive].concat(parts.slice(1, -1)).join('\\').toLowerCase();
   const childLine = [hive].concat(parts.slice(1)).join('\\').toLowerCase();
-  const listing = execFileSync('reg', ['query', parentKey], {
+  const listing = helpers.execFileSync(helpers.path('reg'), ['query', parentKey], {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, timeout: 10000, maxBuffer: 4 * 1024 * 1024,
   });
   const unrecognized = () => new Error('registry-probe-unrecognized-listing');
@@ -1721,8 +1724,8 @@ const launcherAuthorizer = createLauncherAuthorizer({
 const launcherIpc = createLauncherIpc({
   assessSender: (e) => launcherGate.assess(e),
   authorize: (p) => launcherAuthorizer.authorize(p),
-  resolveVscode: () => resolveVscodeExe({ env: process.env, exists: fs.existsSync }),
-  resolveTerminal: () => resolveTerminalExe({ env: process.env, exists: fs.existsSync }),
+  resolveVscode: () => helpers.resolve('code'),
+  resolveTerminal: () => helpers.resolve('wt'),
   launch,
   // Bounded visible refusal on the same main-error channel the nav/%-path refusals use — reason
   // CONSTANT only, never the offending path.

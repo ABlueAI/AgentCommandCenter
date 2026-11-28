@@ -169,7 +169,7 @@ function fakeReg(mode, args) {
 }
 const cpWrapped = Object.assign({}, realCp, {
   execFileSync(file, args) {
-    if (file === 'reg') {
+    if (process.platform === 'win32' && file === path.win32.join(process.env.SystemRoot, 'System32', 'reg.exe')) {
       record.regCalls.push((args || []).slice());
       if (record.regMode !== 'real') return fakeReg(record.regMode, args || []);
       // Real read-only pass-through: keep the ACTUAL listing so its structure can be asserted (N2).
@@ -193,7 +193,7 @@ for (const k of Object.keys(process.env)) {
 Module._load = function (request) {
   if (request === 'electron') return makeElectronStub(USER_DATA, record);
   if (request === '@lydell/node-pty') return ptyStub;
-  if (request === 'child_process') return cpWrapped;
+  if (request === 'node:child_process') return cpWrapped;
   return realLoad.apply(this, arguments);
 };
 

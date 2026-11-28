@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { spawn, execFile, execFileSync } = require('child_process');
-const { createProcessTreeKiller, taskkillArgs, taskkillPath } = require('./process-tree');
+const { createProcessTreeKiller, taskkillArgs } = require('./process-tree');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -15,7 +15,6 @@ function assert(cond, label) {
   else { process.stderr.write(`  ✗ FAIL: ${label}\n`); failed++; }
 }
 
-const WIN_ENV = { SystemRoot: 'C:\\Windows' };
 const TASKKILL = 'C:\\Windows\\System32\\taskkill.exe';
 
 function makeKiller(over) {
@@ -23,7 +22,7 @@ function makeKiller(over) {
   const logs = [];
   const killer = createProcessTreeKiller(Object.assign({
     platform: 'win32',
-    env: WIN_ENV,
+    resolveTaskkill: () => TASKKILL,
     execFile: (exe, args, opts, cb) => { calls.push({ kind: 'async', exe, args, opts }); cb(null); },
     execFileSync: (exe, args, opts) => { calls.push({ kind: 'sync', exe, args, opts }); return ''; },
     log: (line) => logs.push(line),
@@ -39,11 +38,6 @@ function makeKiller(over) {
     'several PIDs are de-duplicated, one /PID each');
   assert(taskkillArgs([0, -1, 1.5, '7', NaN, undefined, null]) === null, 'non-integer, zero, negative and string PIDs are dropped');
   assert(taskkillArgs([]) === null && taskkillArgs(undefined) === null, 'no PID gives no command');
-  assert(taskkillPath(WIN_ENV) === TASKKILL, 'taskkill comes from %SystemRoot%\\System32');
-  assert(taskkillPath({ windir: 'D:\\Win' }) === 'D:\\Win\\System32\\taskkill.exe', 'windir is accepted when SystemRoot is absent');
-  assert(taskkillPath({}) === null, 'no SystemRoot gives no path (never a PATH lookup)');
-  assert(taskkillPath({ SystemRoot: 'Windows' }) === null, 'a relative SystemRoot is refused');
-  assert(taskkillPath({ SystemRoot: '\\\\server\\share' }) === null, 'a UNC SystemRoot is refused');
 }
 
 // --- constructor validation --------------------------------------------------------------------
@@ -101,10 +95,10 @@ function makeKiller(over) {
     'a pane without a valid PID skips taskkill visibly and still calls pty.kill()');
 }
 {
-  const { killer, calls, logs } = makeKiller({ env: {} });
+  const { killer, calls, logs } = makeKiller({ resolveTaskkill() { throw Object.assign(new Error('missing'), { code: 'taskkill-not-found' }); } });
   let done = false;
   killer.killTree(10, () => { done = true; });
-  assert(done && calls.length === 0 && logs.some((l) => /taskkill-path-unresolved/.test(l)),
+  assert(done && calls.length === 0 && logs.some((l) => /taskkill-not-found/.test(l)),
     'without SystemRoot, nothing runs, the skip is logged, and pty.kill() still runs');
 }
 {
@@ -175,7 +169,7 @@ async function realTree() {
   });
   assert(Number.isSafeInteger(grandchild) && alive(parent.pid) && alive(grandchild), 'Windows: parent and detached grandchild are running');
   const logs = [];
-  const killer = createProcessTreeKiller({ platform: process.platform, env: process.env, execFile, execFileSync, log: (l) => logs.push(l) });
+  const killer = createProcessTreeKiller({ platform: process.platform, resolveTaskkill: () => require('./helper-programs').path('taskkill'), execFile, execFileSync, log: (l) => logs.push(l) });
   killer.killTreesSync([parent.pid]);
   await new Promise((r) => setTimeout(r, 1000));
   assert(!alive(parent.pid), 'Windows: the parent is gone');

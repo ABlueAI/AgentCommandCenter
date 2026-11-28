@@ -9,20 +9,23 @@
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Task,
-    [switch]$Force
+    [switch]$Force,
+    [string]$GitExe = "git"
 )
 $ErrorActionPreference = "Stop"
 
-$repoRoot = (git rev-parse --show-toplevel 2>$null)
-if (-not $repoRoot) { throw "Not inside a git repository. cd into your project repo first." }
+$repoRoot = (& $GitExe rev-parse --show-toplevel 2>$null)
+if ($LASTEXITCODE -ne 0 -or -not $repoRoot) { throw "Not inside a git repository. cd into your project repo first." }
 
 $repoName     = Split-Path $repoRoot -Leaf
 $worktreePath = Join-Path (Split-Path $repoRoot -Parent) "$repoName-$Task"
 
 if (-not (Test-Path $worktreePath)) { throw "No worktree found at: $worktreePath" }
 
-if ($Force) { git worktree remove --force $worktreePath }
-else        { git worktree remove $worktreePath }
+if ($Force) { & $GitExe worktree remove --force $worktreePath }
+else        { & $GitExe worktree remove $worktreePath }
+
+if ($LASTEXITCODE -ne 0) { throw "Could not remove the worktree." }
 
 Write-Host "Removed worktree: $worktreePath" -ForegroundColor Green
 Write-Host "Branch agent/$Task still exists. When you're sure it's merged, delete it with:" -ForegroundColor Yellow
