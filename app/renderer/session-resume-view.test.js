@@ -19,6 +19,7 @@ class Stub {
   set textContent(t) { this._text = String(t); this.children = []; }
   get textContent() { return this._text + this.children.map((c) => c.textContent).join(' '); }
   set innerHTML(_) { throw new Error('innerHTML must not be used'); }
+  setAttribute() {}
   all(tag) { return this.children.flatMap((c) => (c.tagName === tag ? [c] : []).concat(c.all(tag))); }
 }
 const doc = { createElement: (t) => new Stub(t) };
@@ -44,7 +45,7 @@ const row = (o) => Object.assign({
 }
 
 // create / render / choices
-{
+async function testChoices() {
   const host = new Stub('div');
   const calls = [];
   const v = view.create({
@@ -67,18 +68,18 @@ const row = (o) => Object.assign({
   assert(host.all('BUTTON').every((b) => b.type === 'button' && typeof b.onclick === 'function'), 'every button is a plain button with a click handler');
 
   const btn = (text, i) => host.all('BUTTON').filter((b) => b.textContent === text)[i || 0];
-  btn('Resume', 1).onclick();
+  await btn('Resume', 1).onclick();
   assert(calls.pop().join() === 'resume,b' && v.rows().length === 3, 'when Resume is declined (returns false) the row stays');
-  btn('Resume', 0).onclick();
+  await btn('Resume', 0).onclick();
   assert(calls.pop().join() === 'resume,a' && v.rows().map((r) => r.sessionId).join() === 'b,c', 'Resume reports the row and removes it');
-  btn('Start fresh').onclick();
+  await btn('Start fresh').onclick();
   assert(calls.pop().join() === 'fresh,b' && v.rows().map((r) => r.sessionId).join() === 'c', 'Start fresh reports the row and removes it');
   assert(/One Claude pane was open/.test(host.textContent), 'the heading follows the count');
   btn('Dismiss').onclick();
   assert(calls.pop().join() === 'dismiss,c' && host.className === 'resume-host hidden', 'Dismiss removes the last row and hides the offer');
 
   v.render([row({ sessionId: 'keep' })]);
-  btn('Start fresh').onclick();
+  await btn('Start fresh').onclick();
   assert(calls.pop().join() === 'fresh,keep' && v.rows().length === 1, 'when Start fresh is declined (returns false) the row stays');
 
   v.render([A, B]);
@@ -88,5 +89,10 @@ const row = (o) => Object.assign({
     'Not now dismisses every row and hides the offer');
 }
 
-process.stdout.write(`\nsession-resume-view: ${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+testChoices().then(() => {
+  process.stdout.write(`\nsession-resume-view: ${passed} passed, ${failed} failed\n`);
+  process.exitCode = failed ? 1 : 0;
+}).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
