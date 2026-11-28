@@ -120,6 +120,7 @@ function setup(overrides = {}) {
     ccQuickLinksView: { createQuickLinksView: () => ({ load: noop }) },
     ccUsageView: { createUsageView: () => ({}) },
   };
+  let reserved = 0;
   const cc = {
     getSettings: async () => ({}),
     getGeminiKeyStatus: async () => ({ ok: true }),
@@ -128,7 +129,11 @@ function setup(overrides = {}) {
     saveSettings: async () => ({}),
     repoGithubUrl: async (repo) => 'https://example.test/' + repo,
     listWorktrees: async () => [],
-    ptyStart: async () => ({ ok: true }),
+    // Main reserves each pane ID before the pane is built (PR #325's ptyReserve), then starts it.
+    ptyReserve: async () => ({ ok: true, id: 'pty' + (++reserved) }),
+    ptyRelease: noop,
+    ptyResize: noop,
+    ptyStart: async (id) => ({ ok: true, id }),
     onPtyData: (handler) => { pty.data = handler; },
     onPtyExit: (handler) => { pty.exit = handler; },
     onClaudeVideoScoutEvent: noop,
@@ -250,7 +255,7 @@ test('#234 failed repository and agent refreshes are visible', async () => {
 test('#235 long-running terminals do not render hidden history and SDK usage still reaches Logs', async () => {
   const env = setup();
   await env.start();
-  env.evaluate('openInAppTerminal(); openInAppTerminal({ role: "video-scout" })');
+  await env.evaluate('(async () => { await openInAppTerminal(); await openInAppTerminal({ role: "video-scout" }); })()');
   env.flushFrames();
   const output = 'ordinary terminal output\r\n'.repeat(10_000);
   env.pty.data({ id: 'pty1', data: output });
@@ -382,7 +387,7 @@ test('#237 Refresh prevents a row from binding Ask to an expired Library handle'
 
 test('#239 Copy Output ignores cleared selection memory but preserves live pointer selection', async () => {
   const env = setup();
-  env.evaluate('openInAppTerminal()');
+  await env.evaluate('openInAppTerminal()');
   const pane = env.evaluate('terms.get("pty1")');
   const copy = pane.pane.querySelector('.copy-out');
   const speak = pane.pane.querySelector('.spk');

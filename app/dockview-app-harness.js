@@ -47,12 +47,14 @@ const STEP_TIMEOUT_MS = 30000;
 // ---------------------------------------------------------------------------
 // Main-side observation. Everything privileged the renderer can reach is counted here.
 // ---------------------------------------------------------------------------
+let paneSequence = 0;
 const ipc = {
   ptyStart: [], ptyKill: [], ptyResize: 0, ptyWrite: 0,
   libraryList: 0, libraryRead: 0, libraryOpenReport: 0,
   layoutSave: 0, layoutLoad: 0, layoutReset: 0, savedLayouts: [],
 };
 function resetIpc() {
+  paneSequence = 0;
   ipc.ptyStart = []; ipc.ptyKill = []; ipc.ptyResize = 0; ipc.ptyWrite = 0;
   ipc.libraryList = 0; ipc.libraryRead = 0; ipc.libraryOpenReport = 0;
   ipc.layoutSave = 0; ipc.layoutLoad = 0; ipc.layoutReset = 0; ipc.savedLayouts = [];
@@ -1352,10 +1354,12 @@ app.whenReady().then(async () => {
   ipcMain.handle('get-gemini-key-status', () => ({ ok: true, hasKey: true, available: true }));
   ipcMain.handle('get-agent-token-status', () => ({ ok: true, hasToken: true })); // S06
   ipcMain.handle('tlog-reset', () => ({ ok: true }));
-  ipcMain.handle('pty-start', async (_e, o) => {
-    ipc.ptyStart.push((o && o.id) || 'unknown');
+  ipcMain.handle('pty-reserve', () => ({ ok: true, id: 'pty' + (++paneSequence) }));
+  ipcMain.on('pty-release', () => {});
+  ipcMain.handle('pty-start', async (_e, _opts, id) => {
+    ipc.ptyStart.push(id || 'unknown');
     if (control.ptyStartDelayMs) await new Promise((r) => setTimeout(r, control.ptyStartDelayMs));
-    return control.ptyStartResult;
+    return { ...control.ptyStartResult, id };
   });
   ipcMain.on('pty-kill', (_e, id) => { ipc.ptyKill.push(id); });
   ipcMain.on('pty-write', () => { ipc.ptyWrite++; });

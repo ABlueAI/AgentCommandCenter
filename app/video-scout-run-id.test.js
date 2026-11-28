@@ -118,11 +118,14 @@ const mainSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8').replace
   assert(!/parse.*stdout|stdout.*parse/i.test(mainSrc.replace(/\/\/[^\n]*/g, '')), 'main.js introduces no terminal-output parser for the run ID');
   // Registry lifecycle: set after spawn, NOT removed on onExit, removed on pty-kill + cleared on shutdown.
   assert(/videoScoutRunIds\.set\(id, acceptedRunId\)/.test(mainSrc), 'main.js registers pane->runId after a successful spawn');
-  const onExit = mainSrc.slice(mainSrc.indexOf('p.onExit(('), mainSrc.indexOf('return { ok: true }'));
+  const onExit = mainSrc.slice(mainSrc.indexOf('p.onExit(('), mainSrc.indexOf('return { ok: true, id }', mainSrc.indexOf('p.onExit((')));
   assert(!/videoScoutRunIds\.(remove|delete|clear)/.test(onExit), 'onExit does NOT remove the run-ID mapping (it survives PTY exit)');
-  // S06 made pty-kill's first line longer (the process-tree kill), so the window is 320, not 220.
-  assert(/ipcMain\.on\('pty-kill'[\s\S]{0,320}videoScoutRunIds\.remove\(id\)/.test(mainSrc), 'pty-kill removes the mapping (explicit pane close)');
-  assert(/window-all-closed[\s\S]{0,220}videoScoutRunIds\.clear\(\)/.test(mainSrc), 'window-all-closed clears the registry (window shutdown)');
+  const retire = mainSrc.slice(mainSrc.indexOf('function retirePtyPane('), mainSrc.indexOf('function retireRendererPanes('));
+  const kill = mainSrc.slice(mainSrc.indexOf("ipcMain.on('pty-kill'")).split('\n});')[0];
+  assert(kill.includes('retirePtyPane(id, sessionMemoryMod.STOP_REASON.CLOSED)') && retire.includes('videoScoutRunIds.remove(id)'),
+    'pty-kill removes the mapping (explicit pane close)');
+  const shutdown = mainSrc.slice(mainSrc.indexOf("app.on('window-all-closed'")).split('\n});')[0];
+  assert(shutdown.includes('videoScoutRunIds.clear()'), 'window-all-closed clears the registry (window shutdown)');
 }
 
 process.stdout.write(`\nvideo-scout-run-id: ${passed} passed, ${failed} failed\n`);

@@ -494,6 +494,11 @@ const ENTRY_PATH = path.join(__dirname, 'renderer', 'index.html');
 const ENTRY_URL = pathToFileURL(ENTRY_PATH).toString();
 const launcherGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
+const pendingPaneIds = new Set();
+const startedPaneIds = new Set(); // Includes exited PTYs whose panes can still open a report.
+let nextPaneId = 0;
+let ptyRendererUnavailable = false;
+const MAX_PENDING_PANES = 128;
 // The only production PTY write primitive. Its admitted closure holds a module-private capability;
 // generic IPC can never manufacture that capability from renderer-controlled data.
 const admissionPtyBoundary = createAdmissionPtyBoundary({
@@ -600,14 +605,26 @@ function createWindow() {
       ],
     },
   });
-  win.webContents.on('render-process-gone', () => { claudeScout.shutdown(); });
+  win.webContents.on('render-process-gone', () => {
+    ptyRendererUnavailable = true;
+    claudeScout.shutdown();
+    retireRendererPanes();
+  });
   win.webContents.on('destroyed', () => { claudeScout.shutdown(); });
-  // A reload (Ctrl+R in the default menu) restarts the renderer's pane numbering, so a run left
-  // going could send its estimate or audio request to a new pane with the same ID. Cancel it.
-  win.webContents.on('did-start-navigation', (details, _url, isInPlace, isMainFrame) => {
+  // A main-document reload replaces the renderer that owned these panes.
+  win.webContents.on('did-start-navigation', (details, url, isInPlace, isMainFrame) => {
     const mainFrame = details?.isMainFrame ?? isMainFrame;
     const sameDocument = details?.isSameDocument ?? isInPlace;
-    if (mainFrame && !sameDocument) claudeScout.shutdown();
+    if (mainFrame && !sameDocument) {
+      claudeScout.shutdown();
+      if ((details?.url ?? url) === ENTRY_URL) {
+        ptyRendererUnavailable = true;
+        retireRendererPanes();
+      }
+    }
+  });
+  win.webContents.on('did-navigate', (_event, url) => {
+    if (url === ENTRY_URL) ptyRendererUnavailable = false;
   });
   // Startup credential notices (loadStoredCredentials) wait for the page, then go to the Logs tab.
   win.webContents.once('did-finish-load', () => flushCredentialNotices((line) => {
@@ -1040,7 +1057,7 @@ function closeControlledRunOnShutdown() {
   if (!(admissionEnabled && admissionBudget.enabled)) return;
   for (const [id, p] of ptys) {
     if (!admissionBudget.isControlledPane(id)) continue;
-    try { p.kill(); } catch {} finally {
+    try { p.kill(); } catch { refusePty('pty-kill', 'terminal-kill-failed'); } finally {
       admissionBudget.notePaneExit(id);
       if (admissionIpc) admissionIpc.forgetPane(id);
     }
@@ -1067,8 +1084,10 @@ app.on('window-all-closed', () => {
   paneStatusNotifications.dispose();
   killPaneTreesOnShutdown();
   closeControlledRunOnShutdown();
-  for (const p of ptys.values()) { try { p.kill(); } catch {} }
+  for (const p of ptys.values()) { try { p.kill(); } catch { refusePty('pty-kill', 'terminal-kill-failed'); } }
   ptys.clear();
+  pendingPaneIds.clear();
+  startedPaneIds.clear();
   videoScoutRunIds.clear(); // window shutdown: the run-ID mapping is process-lifetime only
   // PANE STATUS teardown (finding 6). Clears the heartbeat, stops the named pipe, revokes every
   // token. Idempotent, and it initiates no process control of its own — the pane kills above are the
@@ -1117,17 +1136,6 @@ function tlog(msg) {
 }
 // Call at the start of each createAgent attempt to reset the clock.
 function tlogReset() { _t0 = Date.now(); tlog('--- new createAgent sequence ---'); }
-
-// Resolve paths for the launcher's working-directory checks. The tool hook independently
-// validates file paths at the point of use.
-function realOrNearest(p) {
-  try { return fs.realpathSync.native(p); }
-  catch {
-    const parent = path.dirname(p);
-    if (parent === p) return p; // filesystem root — nothing left to resolve
-    return path.join(realOrNearest(parent), path.basename(p));
-  }
-}
 
 // Turn a git remote into a browsable https URL.
 function remoteToHttps(remote) {
@@ -1420,6 +1428,7 @@ const pageReaderGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrusted
 // The folder of the last page-reader this main process prepared. MAIN-OWNED: the renderer never names a
 // folder for the report hand-off below.
 let lastPageReaderDir = null;
+const preparedReviewerDirs = new Set();
 ipcMain.handle('page-reader-prepare', async (e, req) => {
   const sender = pageReaderGate.assess(e);
   if (!sender.ok) return { ok: false, error: sender.reason };
@@ -1489,11 +1498,14 @@ ipcMain.handle('page-report-to-reviewer', async (e) => {
   }
   const sandbox = await createOutputSandbox('page-report');
   if (!sandbox || !sandbox.ok) return { ok: false, error: 'page-report-sandbox-failed' };
+  let dir;
   try {
-    fs.writeFileSync(path.join(sandbox.dir, pageReaderMod.REPORT_FILE), text, { encoding: 'utf8', flag: 'wx' });
+    dir = fs.realpathSync.native(sandbox.dir);
+    fs.writeFileSync(path.join(dir, pageReaderMod.REPORT_FILE), text, { encoding: 'utf8', flag: 'wx' });
   } catch (err) {
     return { ok: false, error: 'page-report-copy-failed' };
   }
+  preparedReviewerDirs.add(dir);
   tlog('page-report-to-reviewer: report copied');
   return { ok: true, dir: sandbox.dir, initialPrompt: pageReaderMod.REVIEWER_PROMPT };
 });
@@ -1691,6 +1703,8 @@ const ptyStartAuthority = createPtyStartAuthority({
       validRoles: VALID_ROLES, fencedRoles: FENCED_ROLES, validClis: new Set(Object.keys(AGENT_CMD)),
     });
     if (!launch || launch.ok !== true) return launch;
+    const inputRefusal = ptyLaunchInputRefusal(opts, launch);
+    if (inputRefusal) return { ok: false, reason: inputRefusal };
     const withAuthority = applyAuthority(launch, opts.authority);
     if (withAuthority.ok === true && withAuthority.authority !== null) {
       tlog(`pty-start: authority=${withAuthority.authority} permission-mode=${withAuthority.permissionMode || 'not-applied'}`);
@@ -1840,8 +1854,7 @@ function sessionMemoryCall(fn) {
 }
 // paneId -> the main-minted session ID of the Claude pane running in it.
 const paneSessions = new Map();
-// `expected`, when given, is the session the caller started: a pane id the renderer reused (after a
-// reload) then maps to a newer session, which an old pane's exit must not close.
+// `expected`, when given, is the session owned by the exiting process.
 function stopPaneSession(id, reason, expected) {
   const sid = paneSessions.get(id);
   if (!sid || (expected !== undefined && sid !== expected)) return;
@@ -1933,18 +1946,88 @@ function touchPaneSession(id) {
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
 // worktree, optionally running the chosen agent CLI, with bytes streamed both ways.
 // This is what makes agents run *inside* the Command Center window.
-ipcMain.handle('pty-start', (e, opts) => {
-  // FIRST STATEMENT, DELIBERATELY. Sender trust and main-owned classification run before ANY log,
-  // filesystem read, pane-status enrolment, admission claim, command construction or spawn. The
-  // previous handler logged `opts.cwd` and `opts.role` here — before any validation — and
-  // dereferenced `opts.id` on a malformed payload, producing a TypeError instead of a visible
-  // refusal. Both are closed by moving the gate ahead of the log and refusing on a bad shape.
+const PTY_LAUNCH_FIELDS = new Set([
+  'cwd', 'cli', 'agent', 'role', 'authority', 'resumeSessionId', 'model', 'effort', 'initialPrompt',
+  'videoScout', 'videoUrl', 'videoModel', 'mediaResolution', 'analysisMode', 'startOffset',
+  'endOffset', 'sliceRanges', 'analysisFocus', 'cols', 'rows',
+]);
+const MAX_PTY_WRITE_BYTES = 64 * 1024;
+function validPtySize(cols, rows) {
+  return Number.isInteger(cols) && cols >= 1 && cols <= 500
+    && Number.isInteger(rows) && rows >= 1 && rows <= 300;
+}
+
+function ptyLaunchInputRefusal(opts, launch) {
+  if (Object.keys(opts).some((key) => !PTY_LAUNCH_FIELDS.has(key))) return 'unknown-launch-field';
+  const { cwd, cols = 80, rows = 24, model, effort, initialPrompt } = opts;
+  if (!validPtySize(cols, rows)) return 'invalid-terminal-size';
+  if (cwd !== undefined && (typeof cwd !== 'string' || cwd.length > 4096
+    || !path.isAbsolute(cwd) || /[\x00-\x1f\x7f]/.test(cwd))) return 'invalid-working-directory';
+  if (model !== undefined && !VALID_MODELS.has(model)) return 'invalid-launch-model';
+  if (effort !== undefined && !VALID_EFFORTS.has(effort)) return 'invalid-launch-effort';
+  if (initialPrompt !== undefined && (typeof initialPrompt !== 'string' || initialPrompt.length > 4096
+    || initialPrompt.includes('\0') || (initialPrompt && launch.kind !== LAUNCH_KIND.ROLE))) {
+    return 'invalid-initial-prompt';
+  }
+  return null;
+}
+
+function resolvePtyWorkingDirectory(cwd, launch) {
+  try {
+    if (cwd === undefined) {
+      const home = fs.realpathSync.native(process.env.USERPROFILE || app.getPath('home'));
+      return fs.statSync(home).isDirectory() ? { ok: true, dir: home } : { ok: false, reason: 'not-a-directory' };
+    }
+    const permitted = launcherAuthorizer.authorize(cwd);
+    if (permitted.ok || launch.role !== 'reviewer' || permitted.reason !== 'not-authorized') return permitted;
+    // Page-report handoff creates a separate main-owned sandbox for Reviewer.
+    const outputs = fs.realpathSync.native(path.join(loadSettings().projectsRoot, '.command-center', 'outputs'));
+    const report = fs.realpathSync.native(cwd);
+    if (!sameResumeFolder(path.dirname(report), outputs) || !path.basename(report).startsWith('page-report-')) return permitted;
+    if (preparedReviewerDirs.has(report)) return { ok: true, dir: report };
+    const history = sessionMemoryCall(() => sessionMemory().list());
+    if (history.ok && history.records.some((r) => r.role === 'reviewer' && sameResumeFolder(r.worktree, report))) {
+      return { ok: true, dir: report };
+    }
+    return permitted;
+  } catch {
+    return { ok: false, reason: 'unresolved-path' };
+  }
+}
+
+function refusePty(channel, reason) {
+  reportIpcRefusal(channel, reason);
+  return { ok: false, error: reason };
+}
+
+ipcMain.handle('pty-reserve', (e) => {
+  if (ipcSenderRefusal('pty-reserve', e)) return { ok: false, error: 'untrusted-sender' };
+  if (ptyRendererUnavailable) return refusePty('pty-reserve', 'renderer-navigating');
+  if (pendingPaneIds.size >= MAX_PENDING_PANES || nextPaneId >= 999999) {
+    return refusePty('pty-reserve', 'pane-id-limit');
+  }
+  const id = 'pty' + (++nextPaneId);
+  pendingPaneIds.add(id);
+  return { ok: true, id };
+});
+
+ipcMain.on('pty-release', (e, id) => {
+  if (ipcSenderRefusal('pty-release', e)) return;
+  if (!pendingPaneIds.delete(id)) refusePty('pty-release', 'unknown-reservation');
+});
+
+ipcMain.handle('pty-start', (e, opts, id) => {
+  // Sender trust and classification precede filesystem reads, claims, and process startup.
   const authorized = ptyStartAuthority.assess(e, opts);
-  if (!authorized.ok) return { ok: false, error: authorized.reason };
+  if (!authorized.ok) {
+    if (authorized.stage === 'classify') pendingPaneIds.delete(id);
+    return { ok: false, error: authorized.reason };
+  }
+  if (!pendingPaneIds.delete(id)) return refusePty('pty-start', 'unknown-reservation');
   const launch = authorized.launch;
   // Bounded: kind and the fence verdict only. No cwd, no role-supplied string, no prompt.
   tlog(`pty-start: START kind=${launch.kind} fenced=${launch.fenced}`);
-  const { id, cols, rows } = opts;
+  const { cols = 80, rows = 24 } = opts;
   let admissionPaneClaimed = false;
   const refuseAdmissionStart = (reason) => {
     const line = `[admission] eligible Claude pane startup REFUSED [${reason}]`;
@@ -1961,11 +2044,6 @@ ipcMain.handle('pty-start', (e, opts) => {
   // That working directory is the sandbox root for the tool hook's separate file checks.
   let fencedCwd = null;
   if (launch.fenced) {
-    // Reason CONSTANTS only. The pre-existing messages interpolated `declaredCwd`, `resolvedCwd`
-    // and `resolvedRoot` into the Logs tab and the renderer error channel; a refusal must not echo
-    // an attacker-influenced path back out. The CONTAINMENT LOGIC below is unchanged: same
-    // realpath resolution, same win32 case fold, same `startsWith(root + path.sep)` prefix rule,
-    // and still placed BEFORE the missing-cwd fallback to USERPROFILE.
     const fenceRefuse = (reason) => {
       const line = `Fenced launch refused [${reason}]`;
       tlog(line);
@@ -1973,13 +2051,16 @@ ipcMain.handle('pty-start', (e, opts) => {
       return { ok: false, error: reason };
     };
     const declaredCwd = opts.cwd;
-    if (!declaredCwd || !fs.existsSync(declaredCwd)) {
+    let resolvedRoot, resolvedCwd;
+    try {
+      const outputsRoot = path.join(loadSettings().projectsRoot, '.command-center', 'outputs');
+      resolvedRoot = fs.realpathSync.native(outputsRoot);
+      resolvedCwd = fs.realpathSync.native(declaredCwd);
+      if (!fs.statSync(resolvedCwd).isDirectory()) return fenceRefuse('fenced-cwd-not-a-directory');
+    } catch {
       return fenceRefuse('fenced-cwd-missing');
     }
-    const outputsRoot = path.join(loadSettings().projectsRoot, '.command-center', 'outputs');
     const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
-    const resolvedRoot = realOrNearest(outputsRoot);
-    const resolvedCwd  = realOrNearest(declaredCwd);
     const within = fold(resolvedCwd) === fold(resolvedRoot) ||
                    fold(resolvedCwd).startsWith(fold(resolvedRoot) + path.sep);
     if (!within) {
@@ -1998,11 +2079,11 @@ ipcMain.handle('pty-start', (e, opts) => {
     fencedCwd = resolvedCwd;
   }
 
-  // Never spawn into a missing directory: ConPTY throws Windows error 267 (ERROR_DIRECTORY)
-  // from a worker thread, which would surface as a fatal uncaught exception.
-  // Fenced: the validated canonical cwd. Everything else: unchanged.
-  const cwd = fencedCwd !== null ? fencedCwd
-    : ((opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE);
+  // Never spawn into a missing directory or substitute home for an explicit working directory.
+  const workingDir = fencedCwd !== null ? { ok: true, dir: fencedCwd }
+    : resolvePtyWorkingDirectory(opts.cwd, launch);
+  if (!workingDir.ok) return refusePty('pty-start', 'cwd-' + workingDir.reason);
+  const cwd = workingDir.dir;
   // S09: a resume request is checked here, before the admission claim and the spawn, against main's
   // own offer (session-resume.js). A refusal is visible and starts nothing; no silent fresh start.
   const resumeCheck = sessionResume.checkResume({
@@ -2022,7 +2103,7 @@ ipcMain.handle('pty-start', (e, opts) => {
     return { ok: false, error: resumeCheck.reason };
   }
   const resumeSessionId = resumeCheck.sessionId;
-  // -ExecutionPolicy Bypass so npm .ps1 shims (claude/codex/gemini) always launch.
+  // Main-owned CLI/script launches keep the flags required by the tool shims.
   const args = ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-NoExit'];
   if (launch.videoScout) {
     if (!geminiKey) {
@@ -2043,7 +2124,7 @@ ipcMain.handle('pty-start', (e, opts) => {
     // and passes it as a discrete -RunId argument. The renderer never generates, supplies, or
     // derives it, and it is never parsed from terminal output. PowerShell re-validates it before any
     // filesystem use. It is stored in the pane->runId registry below but is NOT returned to the
-    // renderer (pty-start still returns only { ok }).
+    // renderer.
     const runId = generateRunId();
     acceptedRunId = runId;
     // -OutDir is the fixed main-owned run root (V5b2). It equals feed-gemini.ps1's own default, so the
@@ -2072,7 +2153,7 @@ ipcMain.handle('pty-start', (e, opts) => {
   const admissionLaunch = prepareAdmissionPaneLaunch({
     plan: admissionPlan,
     budget: admissionBudget,
-    opts,
+    opts: { ...opts, id },
     validRoles: VALID_ROLES,
   });
   if (!admissionLaunch.ok) return refuseAdmissionStart(admissionLaunch.reason);
@@ -2144,16 +2225,17 @@ ipcMain.handle('pty-start', (e, opts) => {
     agentTokenMissingNoticeSent = true;
     if (win && !win.isDestroyed()) win.webContents.send('main-error', 'Agent pane started WITHOUT the ABlueAgent token: it pushes with your own git login. Save the token in the key setup (🐙) to fix.');
   }
-  tlog(`pty-start: pty.spawn START cwd=${cwd}`);
+  tlog('pty-start: pty.spawn START');
   try {
-    p = pty.spawn('powershell.exe', args, {
+    const startupArgs = launch.kind === LAUNCH_KIND.SHELL ? ['-NoLogo', '-NoProfile'] : args;
+    p = pty.spawn('powershell.exe', startupArgs, {
       name: 'xterm-256color',
-      cols: cols || 80, rows: rows || 24,
+      cols, rows,
       cwd,
       env: ptyEnv,
     });
-  } catch (e) {
-    tlog(`pty-start: pty.spawn FAILED: ${e.message}`);
+  } catch {
+    tlog('pty-start: pty.spawn FAILED');
     // EXPERIMENT A: `envForPane` above ENROLLED this pane and minted its token before the spawn was
     // attempted. No process exists to report status, so main must hand the single Experiment A slot
     // back here — where it was taken — rather than relying on renderer cleanup. Revision 1 leaked the
@@ -2164,11 +2246,11 @@ ipcMain.handle('pty-start', (e, opts) => {
     // A durable pre-spawn claim exists but no process does. Close the run and void its remainder; the
     // already-persisted claim is never transferred to another pane.
     closeAfterFailedSpawn(admissionBudget, id, admissionLaunch);
-    if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id });
-    return { ok: false, error: String((e && e.message) || e) };
+    return refusePty('pty-start', 'spawn-failed');
   }
   tlog('pty-start: pty.spawn END ok');
   ptys.set(id, p);
+  startedPaneIds.add(id);
   if (claudeSessionId) {
     // Recorded only after a successful spawn, so a refused or failed launch leaves no record.
     // S09: a resumed session opens its existing record again in this pane.
@@ -2178,6 +2260,7 @@ ipcMain.handle('pty-start', (e, opts) => {
         sessionId: claudeSessionId, paneId: id, role: launch.role, cli: 'claude', worktree: cwd,
       }));
     if (resumeSessionId) tlog(`pty-start: resumed a recorded Claude session (record ${rec.ok ? 'reopened' : 'not reopened'})`);
+    if (rec.ok) preparedReviewerDirs.delete(cwd);
     // A resumed session is running even if its record couldn't be reopened, so it stays in
     // paneSessions and a second Resume of it is refused as already running.
     if (rec.ok || resumeSessionId) paneSessions.set(id, claudeSessionId);
@@ -2186,7 +2269,9 @@ ipcMain.handle('pty-start', (e, opts) => {
   // returned to the renderer). It intentionally OUTLIVES p.onExit below -- a finished run's report
   // stays openable until the pane is explicitly closed (pty-kill) or the window shuts down.
   if (acceptedRunId) { videoScoutRunIds.set(id, acceptedRunId); tlog(`pty-start: registered video-scout runId for pane ${id}`); }
-  p.onData((data) => { if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data }); });
+  p.onData((data) => {
+    if (ptys.get(id) === p && win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data });
+  });
   // NOTE: onExit removes the PTY handle but deliberately does NOT remove the run-ID mapping (V5b1).
   //
   // TWO REGISTRIES, TWO DELIBERATELY DIFFERENT LIFETIMES — and the difference is the point.
@@ -2202,6 +2287,7 @@ ipcMain.handle('pty-start', (e, opts) => {
   // So pane status is notified HERE (finding 6 / Work Order 1 § F.7: PTY exit is authoritative and does
   // not wait for a SessionEnd hook that may never fire), while the run-ID mapping is deliberately not.
   p.onExit(() => {
+    if (ptys.get(id) !== p) return; // close/reload already handled it
     ptys.delete(id);
     if (claudeSessionId) stopPaneSession(id, sessionMemoryMod.STOP_REASON.EXITED, claudeSessionId);
     // PANE STATUS: publish `exited` first, while the pane is still addressable, then revoke its token.
@@ -2212,7 +2298,7 @@ ipcMain.handle('pty-start', (e, opts) => {
     if (admissionIpc) admissionIpc.forgetPane(id);
     if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id });
   });
-  return { ok: true };
+  return { ok: true, id };
 });
 // TURN ADMISSION BUDGET — THE DIRECT-INPUT CHOKEPOINT.
 //
@@ -2226,34 +2312,60 @@ ipcMain.handle('pty-start', (e, opts) => {
 // and it never echoes the bytes. Uncontrolled panes take the original path, byte-for-byte.
 ipcMain.on('pty-write', (e, payload) => {
   if (ipcSenderRefusal('pty-write', e)) return;
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+    || Object.keys(payload).some((key) => key !== 'id' && key !== 'data')
+    || typeof payload.data !== 'string' || payload.data.length > MAX_PTY_WRITE_BYTES
+    || Buffer.byteLength(payload.data, 'utf8') > MAX_PTY_WRITE_BYTES) {
+    return refusePty('pty-write', 'invalid-terminal-input');
+  }
   const { id, data } = payload;
-  // S46: input reaching a Claude pane is the session's activity (at most one write an hour).
-  touchPaneSession(id);
-  admissionPtyBoundary.writeDirect(id, data);
+  try {
+    const result = admissionPtyBoundary.writeDirect(id, data);
+    if (result.ok) touchPaneSession(id);
+    else if (result.reason === 'pty-missing') refusePty('pty-write', 'unknown-live-pane');
+    // The admission boundary reports blocked input itself with throttling.
+  } catch {
+    refusePty('pty-write', 'terminal-write-failed');
+  }
 });
 ipcMain.on('pty-resize', (e, payload) => {
   if (ipcSenderRefusal('pty-resize', e)) return;
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+    || Object.keys(payload).some((key) => key !== 'id' && key !== 'cols' && key !== 'rows')
+    || !validPtySize(payload.cols, payload.rows)) {
+    return refusePty('pty-resize', 'invalid-terminal-size');
+  }
   const { id, cols, rows } = payload;
   const p = ptys.get(id);
-  if (p) {
-    try { p.resize(cols, rows); }
-    catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); }
-  }
+  if (!p) return refusePty('pty-resize', 'unknown-live-pane');
+  try { p.resize(cols, rows); }
+  catch { refusePty('pty-resize', 'terminal-resize-failed'); }
 });
-// S06: pty-kill kills the pane's process tree first (taskkill /T needs the live shell), then pty.kill().
-ipcMain.on('pty-kill', (e, id) => {
-  if (ipcSenderRefusal('pty-kill', e)) return;
-  const p = ptys.get(id); if (p) { ptys.delete(id); processTree.killTree(p.pid, () => { try { p.kill(); } catch {} }); }
-  // Explicit pane close: the run's report is no longer reachable from the UI, so drop the mapping.
+
+function retirePtyPane(id, stopReason) {
+  startedPaneIds.delete(id);
+  const p = ptys.get(id);
+  ptys.delete(id);
+  // S06: taskkill needs the live shell to find its process tree.
+  if (p) processTree.killTree(p.pid, () => {
+    try { p.kill(); } catch { refusePty('pty-kill', 'terminal-kill-failed'); }
+  });
   videoScoutRunIds.remove(id);
-  // EXPERIMENT A: the pane is gone, so its token must die with it. Releasing here (not on pty-exit)
-  // matches the run-ID registry's rule — a finished agent's pane still exists until Blue closes it.
   paneStatus.releasePane(id);
-  // TURN ADMISSION BUDGET: an explicitly closed pane closes its run too. Same rule as pty-exit — the
-  // remainder is voided, never transferred, and the consumed count is untouched.
   if (admissionEnabled && admissionBudget.enabled) admissionBudget.notePaneExit(id);
   if (admissionIpc) admissionIpc.forgetPane(id);
-  // S08: last, after the kill is started, so recording can never block it.
-  stopPaneSession(id, sessionMemoryMod.STOP_REASON.CLOSED);
+  stopPaneSession(id, stopReason);
+}
+
+function retireRendererPanes() {
+  pendingPaneIds.clear();
+  for (const id of startedPaneIds) retirePtyPane(id, sessionMemoryMod.STOP_REASON.MAKO_CLOSED);
+}
+
+ipcMain.on('pty-kill', (e, id) => {
+  if (ipcSenderRefusal('pty-kill', e)) return;
+  if (pendingPaneIds.delete(id)) return;
+  if (!startedPaneIds.has(id)) return refusePty('pty-kill', 'unknown-pane');
+  retirePtyPane(id, sessionMemoryMod.STOP_REASON.CLOSED);
 });
 

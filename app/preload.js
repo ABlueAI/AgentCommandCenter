@@ -49,7 +49,9 @@ contextBridge.exposeInMainWorld('cc', {
   // in-app terminals (node-pty)
   openTerminalLink: (u) => ipcRenderer.invoke('open-terminal-link', u),
   tlogReset: () => ipcRenderer.invoke('tlog-reset'),
-  ptyStart: (o) => ipcRenderer.invoke('pty-start', o),
+  ptyReserve: () => ipcRenderer.invoke('pty-reserve'),
+  ptyRelease: (id) => ipcRenderer.send('pty-release', id),
+  ptyStart: (id, opts) => ipcRenderer.invoke('pty-start', opts, id),
   claudeVideoScoutRun: (req) => ipcRenderer.invoke('claude-video-scout-run', req),
   claudeVideoScoutTranscript: (req) => ipcRenderer.invoke('claude-video-scout-transcript', req),
   claudeVideoScoutConfirm: (req) => ipcRenderer.invoke('claude-video-scout-confirm', req),

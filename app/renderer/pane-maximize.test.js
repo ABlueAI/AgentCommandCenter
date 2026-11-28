@@ -161,7 +161,8 @@ const css = read('styles.css');
     'and it does so ONLY for a pane the layout engine does not own — the docked branch returns first');
   const onLayoutStart = appSrc.indexOf('onLayout: (maximizedId, previousId)');
   const onLayoutBlock = appSrc.slice(onLayoutStart, appSrc.indexOf('},', appSrc.indexOf('if (focusId)', onLayoutStart)));
-  assert(onLayoutStart > 0 && onLayoutBlock.includes('t.fit.fit()') && onLayoutBlock.includes('cc.ptyResize('),
+  assert(onLayoutStart > 0 && onLayoutBlock.includes('t.fit.fit()') && onLayoutBlock.includes('resizeLivePty(')
+    && /ptyState === 'running'\) cc\.ptyResize\(id, cols, rows\)/.test(appSrc),
     'every layout transition reruns FitAddon AND the PTY resize path (reflow, not unreachable lines)');
   assert(onLayoutBlock.includes('term.focus()'), 'every layout transition restores keyboard focus predictably');
 }

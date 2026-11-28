@@ -101,7 +101,6 @@ const ROLES = {
 
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
 const terms = new Map();
-let termSeq = 0;
 let activeTermId = null;  // last-focused pane (dictation LOCKS its target from this at record start)
 let sttDictationTargetId = null; // pane locked when recording started; transcript goes ONLY here
 const THEMES_XTERM = {
@@ -162,7 +161,7 @@ const paneMaximizer = window.ccPaneMaximize.createPaneMaximizer({
       // Refit and tell ConPTY the new geometry so long lines REFLOW to the new width
       // instead of becoming unreachable. Hidden panes no-op (FitAddon proposes nothing
       // for a zero-size container) and refit again when the grid returns.
-      try { t.fit.fit(); cc.ptyResize(tid, t.term.cols, t.term.rows); } catch {}
+      try { t.fit.fit(); resizeLivePty(tid, t.term.cols, t.term.rows); } catch {}
     }
     // Predictable focus: the maximized pane on maximize; the same pane back in the
     // grid on restore (previousId). Close-while-maximized passes neither — the pane
@@ -431,7 +430,11 @@ function showTermEmpty() {
     $('#terminalGrid').appendChild(d);
   }
 }
-function openInAppTerminal(opts = {}) {
+function resizeLivePty(id, cols, rows) {
+  if (terms.get(id)?.ptyState === 'running') cc.ptyResize(id, cols, rows);
+}
+
+async function openInAppTerminal(opts = {}) {
   // S10: Maximum never runs a Claude agent on this PC (authority-choice.js). No pane is created and
   // no PTY is requested: the task goes to a cloud session instead, through the vetted open-external
   // path. Main refuses a Claude pane at Maximum as well (app/authority-level.js).
@@ -445,9 +448,16 @@ function openInAppTerminal(opts = {}) {
   const { worktree, title, claudeVideoScout } = opts;
   const cli = opts.cli || opts.agent || null;
   const role = (opts.role && ROLES[opts.role]) ? opts.role : null;
+  let reservation;
+  try { reservation = await cc.ptyReserve(); }
+  catch { appendLog('[pty] Pane reservation failed: IPC unavailable\n'); return null; }
+  if (reservation?.ok !== true) {
+    appendLog(`[pty] Pane reservation refused: ${reservation?.error || 'unexpected response'}\n`);
+    return null;
+  }
+  const { id } = reservation;
   switchTab('terminals');
   const empty = $('#termEmpty'); if (empty) empty.remove();
-  const id = 'pty' + (++termSeq);
   const wtName = worktree ? worktree.split(/[\\/]/).pop() : 'shell';
   const label = title || (role ? `${ROLES[role].label} · ${wtName}` : `${cli ? cli + ' · ' : ''}${wtName}`);
   // Role badge (tinted + lock for read-only) replaces the plain CLI dot when a role is set.
@@ -470,6 +480,7 @@ function openInAppTerminal(opts = {}) {
   };
   const term = new Terminal({
     theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000,
+    disableStdin: true,
     // Route OSC 8 through the same app policy as detected text links, including rejected schemes.
     linkHandler: { activate: openTerminalLink, allowNonHttpProtocols: true },
   });
@@ -487,8 +498,7 @@ function openInAppTerminal(opts = {}) {
   } catch { /* no WebGL here — xterm keeps its DOM renderer */ }
   fit.fit();
   if (!claudeVideoScout) term.onData((d) => cc.ptyWrite(id, d));
-  else term.options.disableStdin = true;
-  term.onResize(({ cols, rows }) => cc.ptyResize(id, cols, rows));
+  term.onResize(({ cols, rows }) => resizeLivePty(id, cols, rows));
   // Clipboard, mirroring Windows Terminal / VS Code (not the purist xterm convention):
   //   Ctrl+V (or Ctrl+Shift+V)  -> paste
   //   Ctrl+C                    -> copy when text is selected, otherwise send SIGINT (^C)
@@ -520,7 +530,10 @@ function openInAppTerminal(opts = {}) {
     // keypress that would otherwise make xterm also send a submitting CR.
     const remap = window.ccTermKeys.resolveKey(e, paneCli);
     if (remap.handled) {
-      if (remap.send) { e.preventDefault(); cc.ptyWrite(id, remap.send); }
+      if (remap.send) {
+        e.preventDefault();
+        if (!term.options.disableStdin) cc.ptyWrite(id, remap.send);
+      }
       return false;
     }
     // Ctrl+V / Ctrl+Shift+V: paste once and cancel the browser's own paste (term-keys.js, S31).
@@ -707,6 +720,12 @@ function openInAppTerminal(opts = {}) {
       openReportForPane(id);
     };
   }
+  let ptyRequested = false;
+  const cancelPty = () => {
+    if (!ptyRequested) return;
+    ptyRequested = false;
+    cc.ptyKill(id);
+  };
   // Xterm is the only terminal history view. The SDK Video Scout still needs the
   // line-buffered, ANSI-stripped usage record in Logs, even when split across PTY chunks.
   // The pane's other lines are model output, so only an exact usage line is copied
@@ -752,16 +771,14 @@ function openInAppTerminal(opts = {}) {
       if (window.ccSTT && window.ccSTT.cancelVideoTranscription) window.ccSTT.cancelVideoTranscription(id);
       cc.claudeVideoScoutCancel(id);
     }
-    else cc.ptyKill(id);
+    else cancelPty();
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
   // Undo everything this function built in the RENDERER, for the window in which no PTY exists yet.
   // It is deliberately NOT `closeThisPane`: this path must invoke neither `ptyStart` nor `ptyKill`.
-  // Killing an ID main has never seen would be a false entry in the process trace and would make
-  // "zero PTY was started" unprovable; the whole point of docking before starting is that there is
-  // nothing to kill here. Bounded: it touches only what the lines above created.
+  // Release the unused reservation separately from process control.
   const rollbackLocalPane = () => {
     if (!terms.has(id)) return;
     paneMaximizer.handlePaneClosed(id);
@@ -802,29 +819,33 @@ function openInAppTerminal(opts = {}) {
         + 'pane was removed and NO terminal process was started, so there is no orphan PTY, no '
         + 'hidden pane, and nothing to kill\n');
       rollbackLocalPane();
-      return;
+      cc.ptyRelease(id);
+      return null;
     }
   }
 
   if (claudeVideoScout) {
+    cc.ptyRelease(id); // This pane uses the Claude Video Scout IPC, without a PTY.
     runClaudeVideoInPane(id, opts.videoUrl, opts.analysisFocus, opts.claudeVideoSettings);
-    return;
+    return id;
   }
 
   // Exactly one ptyStart for shell or agent launches, after the pane is visible and owned.
   // S09: `resumeSessionId` comes only from main's own offer (offerResume, above boot); main checks it again.
-  const startResult = cc.ptyStart({ id, cwd: worktree, cli, role, authority: state.authority, resumeSessionId: opts.resumeSessionId, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
+  ptyRequested = true;
+  const startResult = cc.ptyStart(id, { cwd: worktree, cli, role, authority: state.authority, resumeSessionId: opts.resumeSessionId, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
   // A refused or rejected start must not leave a Dockview panel behind: the panel would be a ghost
   // host for a terminal that never ran, and a later Save would persist it. Convergence goes through
   // the SAME idempotent close path the ✕ uses, so the panel, the observer, the xterm and the map
-  // entry each go exactly once — and its `cc.ptyKill` is the belt-and-braces guarantee that no
-  // process survives a start that reported failure after spawning (main ignores a kill for an ID it
-  // does not hold).
+  // entry each go exactly once. Main retires a refused start. If the invoke fails before returning
+  // a result, cancel the reservation or close the process if it already started.
   //
   // In CLASSIC mode this only logs: the pane stays exactly as it always has, because there is no
   // panel to strand and main already surfaces its own refusal through `main-error`.
-  const onStartFailed = (reason) => {
+  const onStartFailed = (reason, cancel) => {
     if (!terms.has(id)) return;             // the user closed it first — nothing to undo
+    if (cancel) cancelPty();
+    ptyRequested = false;
     term.options.disableStdin = true;
     appendLog(`[pty] start FAILED for ${id}: ${reason}`
       + (layoutInstance ? ' — removing the pane and its layout panel\n' : '\n'));
@@ -832,20 +853,28 @@ function openInAppTerminal(opts = {}) {
   };
   Promise.resolve(startResult).then(
     async (res) => {
-      if (!res || res.ok !== true) { onStartFailed((res && res.error) || 'refused'); return; }
+      if (res?.ok === false) { onStartFailed(res.error || 'refused', false); return; }
+      if (res?.ok !== true || res.id !== id) { onStartFailed('unexpected-response', true); return; }
+      if (!terms.has(id)) return;
+      if (paneData.ptyState !== 'exited') {
+        paneData.ptyState = 'running';
+        term.options.disableStdin = false;
+        resizeLivePty(id, term.cols, term.rows);
+      }
       // `ptyStart` is the operation that lets main bind an eligible pane. Boot's earlier snapshot can
       // therefore be legitimately unbound; pull main's post-start truth before Blue uses the bar.
       // With no controlled run `admissionView` is null, so ordinary launches add no IPC call.
       if (admissionView) await admissionView.refresh();
     },
-    () => onStartFailed('ipc-rejected'),
+    () => onStartFailed('ipc-rejected', true),
   );
   // The settle-in refit. Guarded on the pane still being live, because a start failure can close it
   // inside this window and fitting a disposed xterm would throw out of a timer callback.
   setTimeout(() => {
     if (!terms.has(id)) return;
-    fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus();
+    fit.fit(); resizeLivePty(id, term.cols, term.rows); activeTermId = id; term.focus();
   }, 40);
+  return id;
 }
 
 // ---- Dockview layout engine scripts ------------------------------------------------------------
@@ -1290,7 +1319,7 @@ function buildDockviewHost(container) {
       const t = terms.get(paneId);
       return t ? { cols: t.term.cols, rows: t.term.rows } : null;
     },
-    sendResize: (paneId, cols, rows) => cc.ptyResize(paneId, cols, rows),
+    sendResize: resizeLivePty,
     focusPane: (paneId) => {
       const t = terms.get(paneId);
       if (t) { activeTermId = paneId; try { t.term.focus(); } catch {} }
@@ -1302,11 +1331,7 @@ function buildDockviewHost(container) {
     reattachPaneStatus: () => (paneStatusBadge ? paneStatusBadge.reattachAll() : 0),
     // Pane creation goes through the EXISTING code path, so the prototype's terminals are real
     // PTYs carrying the app's own clipboard, OSC 52, TTS, Dictate, and close wiring — not stand-ins.
-    createTerminalPane: async () => {
-      const before = new Set(terms.keys());
-      openInAppTerminal({});
-      return [...terms.keys()].find((id) => !before.has(id)) || null;
-    },
+    createTerminalPane: () => openInAppTerminal({}),
     // The Library is a SINGLETON element that already lives in the tab strip. The prototype docks
     // that exact element and must be able to put it back; it never clones or rebuilds it, because a
     // clone would lose every listener library-view.js and report-followup.js bound to it.
@@ -1597,6 +1622,7 @@ async function boot() {
   cc.onPtyExit(({ id }) => {
     const t = terms.get(id);
     if (t) {
+      t.ptyState = 'exited';
       t.term.options.disableStdin = true;
       t.usageParser?.flush();
       t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n');

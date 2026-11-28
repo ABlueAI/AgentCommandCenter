@@ -462,6 +462,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('get-gemini-key-status', () => ({ ok: true, hasKey: true, available: true }));
   ipcMain.handle('get-agent-token-status', () => ({ ok: true, hasToken: true }));
   ipcMain.handle('tlog-reset', () => ({ ok: true }));
+  ipcMain.handle('pty-reserve', () => ({ ok: true, id: 'pty1' }));
+  ipcMain.on('pty-release', () => {});
   ipcMain.handle('pty-start', () => { ipc.ptyStart += 1; return { ok: false, error: 'harness' }; });
   ipcMain.on('pty-kill', () => {});
   ipcMain.on('pty-write', () => {});

@@ -284,8 +284,10 @@ const REGIONS = [
     // Previous pin retained: 1896 / ba003038c21fb4c802fa0d86c0d65dd1e12774f24e57fe6568d15182c36d8de0
     start: 'if (launch.fenced) {',
     end: '// Never spawn into a missing directory',
-    utf16Length: 2183,
-    sha: '080893bcf88208575975d6cea67703c646b944e9495e625cf82d71520d7b93dc',
+    // #262 requires existing directories and strict canonicalization before containment.
+    // Previous pin: 2183 / 080893bcf88208575975d6cea67703c646b944e9495e625cf82d71520d7b93dc
+    utf16Length: 1839,
+    sha: '567c16496534bb833680af30b7fc00b1014884685a4c2b2a3bbc204d98df1645',
   },
   {
     name: 'ptyEnv block',
@@ -322,7 +324,7 @@ const REGIONS = [
     // pane-status enrolment, admission claim, command construction or spawn. The IPC event parameter
     // is consequently `e` rather than `_e`, which moves this region's own start anchor.
     // Previous pin retained: 13566 / da784a2e5c6be38e4daecc0e7fdfaf1f404aacfa5aac2cd01c8f6c2e2235fad9
-    start: "ipcMain.handle('pty-start', (e, opts) => {",
+    start: "ipcMain.handle('pty-start', (e, opts, id) => {",
     end: "ipcMain.on('pty-write'",
     // RE-PINNED when Experiment A was retired and production pane status landed. The handler now
     // enrolls the pane through the production controller instead of the prototype's envForPane().
@@ -395,8 +397,10 @@ const REGIONS = [
     // Page-reader navigation adds the argument pinned above. Comments describe its environment
     // scope and the separate responsibilities of the launcher's cwd check and the tool hook.
     // Previous pin: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
-    utf16Length: 18721,
-    sha: '3376aed51170cb667c3030155985b52c949d3af3e9d6fc88396270cde0677121',
+    // #262, #263 and #268 add cwd authorization, main-issued pane IDs, and input checks.
+    // Previous pin: 18721 / 3376aed51170cb667c3030155985b52c949d3af3e9d6fc88396270cde0677121
+    utf16Length: 18239,
+    sha: 'f9c0afb3aba2d2df09a9f87aa605dbe8e5147244b2575c049ad94386807b409a',
   },
 ];
 
@@ -442,7 +446,7 @@ assert(!/BLUE_HELM_PANE_STATUS_PANE_REF\s*:/.test(src),
 // re-pin cannot quietly drop them along with the hash.
 {
   const failTail = src.slice(mustFind(src, 'pty-start: pty.spawn FAILED', 'spawn-failure block'));
-  const failBlock = failTail.slice(0, mustFind(failTail, 'return { ok: false', 'spawn-failure block end'));
+  const failBlock = failTail.slice(0, mustFind(failTail, "return refusePty('pty-start', 'spawn-failed')", 'spawn-failure block end'));
   assert(failBlock.indexOf('paneStatus.releasePane(id)') !== -1,
     'a failed pty.spawn releases the pane-status enrolment in main\'s own failure path');
 }
@@ -491,22 +495,23 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
 
 // FENCE BOUNDARY CORRECTION (L1) content assertions — pinned as wiring so a future re-pin cannot drop
 // them with the hash. The fenced branch records the canonical cwd it resolved from, and the spawn cwd
-// uses it for fenced launches while the non-fenced rule is unchanged.
+// uses it for fenced launches; other launches require their own directory authorization.
 {
   const gateStart = mustFind(src, 'if (launch.fenced) {', 'fenced gate');
   const gate = src.slice(gateStart, mustFind(src, '// Never spawn into a missing directory', 'fenced gate end'));
   const assignAt = gate.indexOf('fencedCwd = resolvedCwd;');
   assert(assignAt !== -1 && assignAt > gate.indexOf('ptyStartAuthority.authorizeFencedRole({ role: launch.role, cwd: resolvedCwd })'),
     'L1: the fenced branch records resolvedCwd only AFTER the definition resolved from it was accepted');
-  assert(src.indexOf("const cwd = fencedCwd !== null ? fencedCwd\n    : ((opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE);") !== -1,
-    'L1: fenced launches spawn from that canonical cwd; the non-fenced cwd rule is unchanged');
+  assert(src.includes("const workingDir = fencedCwd !== null ? { ok: true, dir: fencedCwd }\n    : resolvePtyWorkingDirectory(opts.cwd, launch)")
+    && src.includes('const cwd = workingDir.dir;'),
+    'L1: fenced launches spawn from the canonical cwd; other launches resolve an authorized directory');
 }
 
 // CONTROLLED WEBFETCH content assertions — pinned as wiring so a future re-pin cannot drop them with the
 // hash. The grant is decided only after the admission claim, only from main-owned values, and the
 // command is built exactly once, after that decision.
 {
-  const hStart = mustFind(src, "ipcMain.handle('pty-start', (e, opts) => {", 'pty-start handler');
+  const hStart = mustFind(src, "ipcMain.handle('pty-start', (e, opts, id) => {", 'pty-start handler');
   const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
   const claimAt = handler.indexOf('admissionPaneClaimed = admissionLaunch.controlled === true;');
   const decideAt = handler.indexOf('const webFetch = controlledWebFetchLaunch({');
@@ -527,7 +532,7 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
 // the hash. The session ID is minted in main, after the WebFetch decision, only for Claude panes; it is
 // recorded only after a successful spawn; and the command builder accepts only a UUID.
 {
-  const hStart = mustFind(src, "ipcMain.handle('pty-start', (e, opts) => {", 'pty-start handler');
+  const hStart = mustFind(src, "ipcMain.handle('pty-start', (e, opts, id) => {", 'pty-start handler');
   const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
   const mintAt = handler.indexOf('const claudeSessionId = resumeSessionId\n    || ((launch.kind === LAUNCH_KIND.ROLE || (launch.kind === LAUNCH_KIND.CLI && launch.cli === \'claude\'))\n      ? crypto.randomUUID() : null);');
   assert(mintAt !== -1 && mintAt > handler.indexOf('const webFetch = controlledWebFetchLaunch({')
@@ -545,7 +550,7 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
   // S09: the resume check runs after the spawn cwd is chosen and before the admission claim, a refusal
   // returns before anything else, and only main's checked copy of the ID can reach the command.
   const checkAt = handler.indexOf('const resumeCheck = sessionResume.checkResume({');
-  assert(checkAt !== -1 && checkAt > handler.indexOf('const cwd = fencedCwd !== null ? fencedCwd')
+  assert(checkAt !== -1 && checkAt > handler.indexOf('const cwd = workingDir.dir;')
     && checkAt < handler.indexOf('const admissionLaunch = prepareAdmissionPaneLaunch({'),
     'S09: the resume check runs after the spawn cwd is chosen and before the admission claim');
   const refuseAt = handler.indexOf('if (!resumeCheck.ok) {');
@@ -565,8 +570,11 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
     'S08: the process exit closes only the session this launch started, as `exited`');
   // The three call sites outside pty-start. Each runs AFTER its kill, so recording can never block one.
   const kill = src.slice(mustFind(src, "ipcMain.on('pty-kill'", 'pty-kill'), src.indexOf('\n});', src.indexOf("ipcMain.on('pty-kill'")));
-  const closeAt = kill.indexOf('stopPaneSession(id, sessionMemoryMod.STOP_REASON.CLOSED);');
-  assert(closeAt !== -1 && closeAt > kill.indexOf('processTree.killTree(p.pid'),
+  const retireAt = mustFind(src, 'function retirePtyPane(', 'retire helper');
+  const retire = src.slice(retireAt, mustFind(src, 'function retireRendererPanes(', 'retire helper end'));
+  const closeAt = retire.indexOf('stopPaneSession(id, stopReason);');
+  assert(kill.includes('retirePtyPane(id, sessionMemoryMod.STOP_REASON.CLOSED);')
+    && retire.includes('processTree.killTree(p.pid') && closeAt > retire.indexOf('processTree.killTree(p.pid'),
     'S08: pty-kill closes the record as `closed`, after the tree kill is started');
   const shut = src.slice(mustFind(src, 'function killPaneTreesOnShutdown() {', 'shutdown kill'), src.indexOf('\n}', src.indexOf('function killPaneTreesOnShutdown() {')));
   const madeAt = shut.indexOf('sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.MAKO_CLOSED));');

@@ -32,7 +32,12 @@ function makeElectronStub(userDataDir, record) {
   const mainFrame = { url: ENTRY_URL };
   const fakeWebContents = {
     mainFrame,
-    on() {}, send(ch, line) { record.mainErrors.push(String(line)); },
+    on(ch, listener) { record.windowEvents.set(ch, listener); },
+    once(ch, listener) { this.on(ch, listener); },
+    send(ch, payload) {
+      if (ch === 'main-error') record.mainErrors.push(String(payload));
+      if (ch === 'pty-data' || ch === 'pty-exit') record.ptyEvents.push({ ch, payload });
+    },
     setWindowOpenHandler() {}, openDevTools() {},
     session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} },
   };
@@ -108,15 +113,33 @@ for (const r of ['web-scout', 'operator', 'source-scout', 'builder']) {
   fs.writeFileSync(path.join(AGENTS, r + '.md'), src.replace('__CC_HOOK__', HOOK_FWD), 'utf8');
 }
 const SANDBOX = fs.mkdtempSync(path.join(OUTPUTS, 'web-scout-fixture-'));
+const REPO = path.join(PROJECTS, 'repo');
+const OTHER_REPO = path.join(PROJECTS, 'other');
+for (const dir of [REPO, OTHER_REPO]) {
+  fs.mkdirSync(dir);
+  require('child_process').execFileSync('git', ['init', '--quiet', dir]);
+}
 
-const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], exitHandlers: [], mainErrors: [], webContents: null };
+function removeFixtureLink(link) {
+  if (process.platform === 'win32') fs.rmdirSync(link);
+  else fs.unlinkSync(link);
+}
+
+const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], exitHandlers: [], dataHandlers: [], killed: [], writes: [], resizes: [], ptyEvents: [], windowEvents: new Map(), mainErrors: [], webContents: null };
 const ptyStub = {
   spawn(file, args, opts) {
     record.ptySpawns += 1;
     record.spawnArgs.push({ file, args, cwd: opts && opts.cwd, env: opts && opts.env });
     // onExit handlers are kept so the S08 section can simulate a process exit without pty-kill (which
     // would run a real tree kill on the stub's pid).
-    return new Proxy({ onData() {}, onExit(cb) { record.exitHandlers.push(cb); }, write() {}, resize() {}, kill() {}, pid: 1234 },
+    const spawnNumber = record.spawnArgs.length;
+    return new Proxy({
+      onData(cb) { record.dataHandlers.push(cb); },
+      onExit(cb) { record.exitHandlers.push(cb); },
+      write(data) { record.writes.push(data); },
+      resize(cols, rows) { record.resizes.push({ cols, rows }); },
+      kill() { record.killed.push(spawnNumber); },
+    },
       { get(t, k) { return k in t ? t[k] : () => {}; } });
   },
 };
@@ -209,6 +232,70 @@ Module._load = function (request) {
   const wc = record.webContents;
   const goodEvent = { sender: wc, senderFrame: wc.mainFrame };
 
+  section('PTY start-up options, pane IDs and input checks');
+  const reserve = () => record.handled.get('pty-reserve')(goodEvent);
+  const startPane = (event, opts) => ptyStart(event, opts, reserve().id);
+  const startShell = async (fields = {}) => {
+    const reservation = await reserve();
+    return ptyStart(goodEvent, { cwd: REPO, cols: 80, rows: 24, ...fields }, reservation?.id);
+  };
+  const shell = await startShell();
+  assert(shell.ok && JSON.stringify(record.spawnArgs.at(-1).args) === JSON.stringify(['-NoLogo', '-NoProfile']),
+    '#262: PowerShell receives only the fixed default start-up options');
+  const foreign = await startShell({ cwd: HOME });
+  assert(!foreign.ok, '#262: an existing but unauthorized directory is refused');
+  assert(typeof shell.id === 'string' && shell.id !== (await startShell()).id,
+    '#263: main issues distinct pane IDs');
+  const logsBeforeKill = record.mainErrors.length;
+  record.on.get('pty-kill')(goodEvent, 'unknown-pane');
+  assert(record.mainErrors.length > logsBeforeKill, '#263: closing an unknown pane is refused visibly');
+  assert(!(await startShell({ id: 'renderer-pane' })).ok, '#263: a renderer ID in launch options is refused');
+  assert(!(await startShell({ cols: 100000 })).ok, '#268: excessive dimensions are refused at start');
+  assert(!(await startShell({ extra: true })).ok, '#268: unknown launch fields are refused');
+  const logsBeforeInput = record.mainErrors.length;
+  record.on.get('pty-write')(goodEvent, { id: shell.id, data: 'x'.repeat(65537) });
+  record.on.get('pty-resize')(goodEvent, { id: shell.id, cols: 80, rows: -1 });
+  assert(record.mainErrors.length >= logsBeforeInput + 2, '#268: oversized writes and invalid resizes are refused visibly');
+  const shellExit = record.exitHandlers[0];
+  const shellData = record.dataHandlers[0];
+  const startsBeforeReplay = record.ptySpawns;
+  assert(!(await ptyStart(goodEvent, { cwd: REPO }, shell.id)).ok
+    && record.ptySpawns === startsBeforeReplay, '#263: a start reservation is single-use');
+  const pending = await reserve();
+  record.on.get('pty-kill')(goodEvent, pending?.id);
+  assert(!(await ptyStart(goodEvent, { cwd: REPO }, pending?.id)).ok,
+    '#263: closing before start retires the reservation');
+  const stale = await reserve();
+  record.windowEvents.get('did-start-navigation')({ url: ENTRY_URL, isMainFrame: true, isSameDocument: false });
+  assert(!(await ptyStart(goodEvent, { cwd: REPO }, stale?.id)).ok,
+    '#263: reloading retires reservations');
+  assert(!reserve().ok, '#263: a departing renderer cannot reserve another pane during reload');
+  assert(record.killed.includes(1), '#263: reloading cleans up a live process');
+  const eventsBeforeExit = record.ptyEvents.length;
+  shellData?.('old output');
+  shellExit?.();
+  assert(record.ptyEvents.length === eventsBeforeExit, '#263: a retired pane cannot send late output or exit');
+  record.windowEvents.get('did-navigate')({}, ENTRY_URL);
+  const afterReload = await startShell();
+  assert(afterReload.ok && typeof afterReload.id === 'string' && afterReload.id !== shell.id,
+    '#263: reload does not reuse a retired ID');
+  assert(!(await startShell({ cwd: path.join(REPO, 'missing') })).ok,
+    '#262: an explicitly missing folder is refused');
+  const inputBefore = record.writes.length;
+  const resizeBefore = record.resizes.length;
+  let malformedThrew = false;
+  try { record.on.get('pty-write')(goodEvent, null); } catch { malformedThrew = true; }
+  assert(!malformedThrew, '#268: malformed write is refused without throwing');
+  record.on.get('pty-write')(goodEvent, { id: afterReload.id, data: '€'.repeat(22000) });
+  record.on.get('pty-resize')(goodEvent, { id: afterReload.id, cols: 80.5, rows: 24 });
+  assert(record.writes.length === inputBefore && record.resizes.length === resizeBefore,
+    '#268: malformed input, oversized UTF-8 and fractional geometry do not reach the PTY');
+  record.on.get('pty-write')(goodEvent, { id: afterReload.id, data: 'é\r' });
+  record.on.get('pty-resize')(goodEvent, { id: afterReload.id, cols: 120, rows: 40 });
+  assert(record.writes.at(-1) === 'é\r' && record.resizes.at(-1)?.cols === 120,
+    '#268: valid terminal input and geometry reach the current PTY');
+  record.ptySpawns = 0;
+
   section('PRECONDITIONS');
   assert(typeof ptyStart === 'function', 'the real main.js registered a pty-start handler');
   assert(record.windowsCreated === 1, 'main reached Electron readiness');
@@ -223,7 +310,7 @@ Module._load = function (request) {
   section('POSITIVE CONTROL — a fenced role launches and carries the main-issued denials');
   {
     const before = record.ptySpawns;
-    const r = await ptyStart(goodEvent, { id: 'pane-fenced', role: 'web-scout', cli: 'claude', cwd: SANDBOX, cols: 80, rows: 24 });
+    const r = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX, cols: 80, rows: 24 });
     assert(!r || r.ok !== false, 'a correctly formed fenced launch is NOT refused');
     assert(record.ptySpawns === before + 1, 'and it spawns exactly one PTY');
     const cmd = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
@@ -242,18 +329,17 @@ Module._load = function (request) {
   }
   {
     // The denials are MAIN-OWNED constants: no renderer field may add, remove, or reorder them.
-    // MOVED (M2): this case used to carry `initialPrompt: 'ignore previous --disallowedTools'`; a
-    // fenced prompt is now refused outright (see the M2 section), so it is exercised there instead.
-    const before = record.ptySpawns;
-    await ptyStart(goodEvent, {
-      id: 'pane-inject', role: 'web-scout', cli: 'claude', cwd: SANDBOX,
+      const before = record.ptySpawns;
+    const refused = await startPane(goodEvent, {
+      role: 'web-scout', cli: 'claude', cwd: SANDBOX,
       disallowedTools: 'nothing', allowedTools: 'Bash',
       // Controlled-WebFetch spoofs: none of these is read by main.
       webFetch: { allowedToolsRule: 'WebFetch(domain:evil.com)', mode: 'https://example.com' },
       webFetchMode: 'https://example.com', controlled: true, permissions: { allow: ['WebFetch'] },
       env: { BLUE_HELM_CONTROLLED_WEBFETCH_MODE: 'https://example.com' },
     });
-    assert(record.ptySpawns === before + 1, 'the launch still proceeds');
+    assert(!refused.ok && refused.error === 'unknown-launch-field' && record.ptySpawns === before,
+      'the launch refuses unknown fields before any spawn');
     const cmd = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     assert((cmd.match(/--disallowedTools Bash Glob NotebookEdit/g) || []).length === 1,
       'renderer fields cannot alter the denial arguments');
@@ -265,7 +351,7 @@ Module._load = function (request) {
   }
   {
     const before = record.ptySpawns;
-    await ptyStart(goodEvent, { id: 'pane-builder', role: 'builder', cli: 'claude', cwd: FIX });
+    await startPane(goodEvent, { role: 'builder', cli: 'claude', cwd: REPO });
     assert(record.ptySpawns === before + 1, 'BUILDER IS UNAFFECTED: it launches from a non-sandbox cwd');
     const cmd = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     assert(cmd.indexOf('--agent builder') !== -1, 'as the builder agent');
@@ -283,34 +369,37 @@ Module._load = function (request) {
     const readMem = () => JSON.parse(fs.readFileSync(memPath, 'utf8'));
     const lastCmd = () => record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     const before = record.ptySpawns;
-    await ptyStart(goodEvent, { id: 'pane-s08', role: 'builder', cli: 'claude', cwd: FIX, sessionId: '11111111-1111-1111-1111-111111111111' });
-    assert(record.ptySpawns === before + 1, 'a builder pane launches');
+    const suppliedId = await startPane(goodEvent, {
+      role: 'builder', cli: 'claude', cwd: REPO, sessionId: '11111111-1111-1111-1111-111111111111',
+    });
+    assert(!suppliedId.ok && record.ptySpawns === before, 'a renderer-supplied sessionId is refused');
+    const started = await startPane(goodEvent, { role: 'builder', cli: 'claude', cwd: REPO });
+    assert(started.ok && record.ptySpawns === before + 1, 'a builder pane launches');
     const m = lastCmd().match(new RegExp('claude --agent builder --session-id (' + UUID + ')$'));
     assert(m !== null, 'its command ends with a main-minted --session-id UUID');
-    assert(lastCmd().indexOf('11111111-1111-1111-1111-111111111111') === -1, 'a renderer-supplied sessionId is ignored');
     const sid = m && m[1];
     let mem = readMem();
     let rec = mem.records.find((r) => r.sessionId === sid);
-    assert(mem.version === 1 && rec && rec.paneId === 'pane-s08' && rec.role === 'builder' && rec.cli === 'claude'
-      && rec.worktree === FIX && typeof rec.startedAt === 'string' && rec.stoppedAt === null,
+    assert(mem.version === 1 && rec && rec.paneId === started.id && rec.role === 'builder' && rec.cli === 'claude'
+      && rec.worktree === fs.realpathSync.native(REPO) && typeof rec.startedAt === 'string' && rec.stoppedAt === null,
       'session-memory.json in userData records the session ID, pane, role and worktree, still open');
     record.exitHandlers[record.exitHandlers.length - 1]();
     rec = readMem().records.find((r) => r.sessionId === sid);
     assert(rec && typeof rec.stoppedAt === 'string' && rec.stopReason === 'exited', 'the process exit closes the record as `exited`');
 
-    await ptyStart(goodEvent, { id: 'pane-s08-cli', role: null, cli: 'claude', cwd: FIX });
+    await startPane(goodEvent, { role: null, cli: 'claude', cwd: REPO });
     const m2 = lastCmd().match(new RegExp('-Command claude --session-id (' + UUID + ')$'));
     assert(m2 !== null && m2[1] !== sid, 'a bare claude CLI pane gets its own fresh session ID');
     rec = readMem().records.find((r) => r.sessionId === (m2 && m2[1]));
     assert(rec && rec.role === null && rec.cli === 'claude', 'and is recorded with no role');
     const count = readMem().records.length;
-    await ptyStart(goodEvent, { id: 'pane-s08-codex', role: null, cli: 'codex', cwd: FIX });
+    await startPane(goodEvent, { role: null, cli: 'codex', cwd: REPO });
     assert(lastCmd().indexOf('--session-id') === -1, 'a codex pane gets no --session-id');
-    await ptyStart(goodEvent, { id: 'pane-s08-shell', role: null, cli: null, cwd: FIX });
+    await startPane(goodEvent, { role: null, cli: null, cwd: REPO });
     assert(lastCmd().indexOf('--session-id') === -1, 'a plain shell pane gets no --session-id');
     assert(readMem().records.length === count, 'and neither is recorded');
     const spawnsBefore = record.ptySpawns;
-    await ptyStart(goodEvent, { id: 'pane-s08-bad', role: 'Builder', cli: 'claude', cwd: FIX });
+    await startPane(goodEvent, { role: 'Builder', cli: 'claude', cwd: REPO });
     assert(record.ptySpawns === spawnsBefore && readMem().records.length === count, 'a refused launch spawns nothing and records nothing');
   }
 
@@ -324,8 +413,8 @@ Module._load = function (request) {
     const SID_GONE = '5e55a0b1-0000-4000-8000-00000000000c';
     const stopped = { startedAt: '2026-10-27T09:00:00.000Z', stoppedAt: '2026-10-27T10:00:00.000Z', stopReason: 'mako-closed', cli: 'claude' };
     const mem = readMem();
-    mem.records.push(Object.assign({ sessionId: SID, paneId: 'old1', role: 'builder', worktree: FIX }, stopped));
-    mem.records.push(Object.assign({ sessionId: SID_BARE, paneId: 'old2', role: null, worktree: FIX }, stopped));
+    mem.records.push(Object.assign({ sessionId: SID, paneId: 'old1', role: 'builder', worktree: REPO }, stopped));
+    mem.records.push(Object.assign({ sessionId: SID_BARE, paneId: 'old2', role: null, worktree: REPO }, stopped));
     mem.records.push(Object.assign({ sessionId: SID_GONE, paneId: 'old3', role: null, worktree: path.join(FIX, 'gone') }, stopped));
     fs.writeFileSync(memPath, JSON.stringify(mem));
 
@@ -342,32 +431,34 @@ Module._load = function (request) {
     assert(gone && gone.worktreeMissing === true, 'a pane whose folder is gone is flagged');
 
     const refusedResumes = [
-      ['a different folder', { id: 'pane-r1', role: 'builder', cli: 'claude', cwd: SANDBOX, resumeSessionId: SID }],
-      ['a different role', { id: 'pane-r2', role: 'reviewer', cli: 'claude', cwd: FIX, resumeSessionId: SID }],
-      ['a codex pane', { id: 'pane-r3', role: null, cli: 'codex', cwd: FIX, resumeSessionId: SID_BARE }],
-      ['an opening prompt', { id: 'pane-r4', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID, initialPrompt: 'hi' }],
-      ['an ID not offered', { id: 'pane-r5', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: '5e55a0b1-0000-4000-8000-0000000000ff' }],
-      ['a hostile ID', { id: 'pane-r6', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID + ' --dangerously-skip-permissions' }],
-      ['a folder that is gone (main falls back to USERPROFILE)', { id: 'pane-r7', role: null, cli: 'claude', cwd: path.join(FIX, 'gone'), resumeSessionId: SID_GONE }],
+      ['a different folder', { role: 'builder', cli: 'claude', cwd: OTHER_REPO, resumeSessionId: SID }],
+      ['a different role', { role: 'reviewer', cli: 'claude', cwd: REPO, resumeSessionId: SID }],
+      ['a codex pane', { role: null, cli: 'codex', cwd: REPO, resumeSessionId: SID_BARE }],
+      ['an opening prompt', { role: 'builder', cli: 'claude', cwd: REPO, resumeSessionId: SID, initialPrompt: 'hi' }],
+      ['an ID not offered', { role: 'builder', cli: 'claude', cwd: REPO, resumeSessionId: '5e55a0b1-0000-4000-8000-0000000000ff' }],
+      ['a hostile ID', { role: 'builder', cli: 'claude', cwd: REPO, resumeSessionId: SID + ' --dangerously-skip-permissions' }],
+      ['a folder that is gone', { role: null, cli: 'claude', cwd: path.join(FIX, 'gone'), resumeSessionId: SID_GONE }],
     ];
     for (const [label, opts] of refusedResumes) {
       const before = record.ptySpawns;
       const errs = record.mainErrors.length;
-      const res = await ptyStart(goodEvent, opts);
+      const res = await startPane(goodEvent, opts);
       assert(res && res.ok === false && record.ptySpawns === before
-        && record.mainErrors.slice(errs).some((l) => /^Resume refused \[resume-[a-z-]+\]$/.test(l)),
+        && record.mainErrors.slice(errs).some((l) => label === 'a folder that is gone'
+          ? l === 'pty-start refused: cwd-unresolved-path'
+          : /^Resume refused \[resume-[a-z-]+\]$/.test(l)),
       'resume with ' + label + ': refused visibly, ZERO PTYs');
     }
 
     const before = record.ptySpawns;
-    const res = await ptyStart(goodEvent, { id: 'pane-resume', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID });
+    const res = await startPane(goodEvent, { role: 'builder', cli: 'claude', cwd: REPO, resumeSessionId: SID });
     assert(res && res.ok === true && record.ptySpawns === before + 1, 'an offered builder session resumes in its folder');
     assert(new RegExp('claude --agent builder --resume ' + SID + '$').test(lastCmd()) && lastCmd().indexOf('--session-id') === -1,
       'its command ends with --resume <the recorded ID>, and mints no new --session-id');
     let r = readMem().records.find((x) => x.sessionId === SID);
-    assert(r && r.paneId === 'pane-resume' && r.stoppedAt === null && r.stopReason === null && r.startedAt === stopped.startedAt,
+    assert(r && r.paneId === res.id && r.stoppedAt === null && r.stopReason === null && r.startedAt === stopped.startedAt,
       'the same record is open again, in the new pane');
-    const twice = await ptyStart(goodEvent, { id: 'pane-resume-2', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID });
+    const twice = await startPane(goodEvent, { role: 'builder', cli: 'claude', cwd: REPO, resumeSessionId: SID });
     assert(twice && twice.ok === false && record.ptySpawns === before + 1, 'the same session can\'t be resumed into a second pane');
     const after = await offerIpc(goodEvent);
     assert(after.ok && !after.rows.some((x) => x.sessionId === SID), 'and it leaves the offer');
@@ -375,7 +466,7 @@ Module._load = function (request) {
     assert((await dismissIpc(goodEvent, SID_BARE)).ok === true, 'Start fresh marks a session answered');
     r = readMem().records.find((x) => x.sessionId === SID_BARE);
     assert(r && r.offered === true, 'its record says so');
-    const fresh = await ptyStart(goodEvent, { id: 'pane-resume-3', role: null, cli: 'claude', cwd: FIX, resumeSessionId: SID_BARE });
+    const fresh = await startPane(goodEvent, { role: null, cli: 'claude', cwd: REPO, resumeSessionId: SID_BARE });
     assert(fresh && fresh.ok === false, 'a dismissed session can no longer be resumed');
     assert((await dismissIpc(goodEvent, 'not-a-uuid')).ok === false, 'dismiss refuses a non-UUID');
   }
@@ -392,7 +483,7 @@ Module._load = function (request) {
     assert((await listIpc(untrusted)).ok === false && (await doneIpc(untrusted, '5e55a0b1-0000-4000-8000-000000000009', 'x')).ok === false,
       'both refuse an untrusted sender');
 
-    const res = await ptyStart(goodEvent, { id: 'pane-s46', role: null, cli: 'claude', cwd: FIX });
+    const res = await startPane(goodEvent, { role: null, cli: 'claude', cwd: REPO });
     const m = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ').match(new RegExp('--session-id (' + UUID + ')$'));
     const sid = m && m[1];
     assert(res && res.ok === true && sid, 'a new claude pane starts');
@@ -400,12 +491,13 @@ Module._load = function (request) {
     assert(rec && rec.owner === 'blue', 'its record is owned by Blue');
 
     const ptyWrite = record.on.get('pty-write');
-    const onData = (data) => ptyWrite(goodEvent, { id: 'pane-s46', data });
+    const onData = (data) => ptyWrite(goodEvent, { id: res.id, data });
     onData('hello');
     rec = readMem().records.find((r) => r.sessionId === sid);
     assert(rec && typeof rec.lastActiveAt === 'string', 'its first input records last activity');
-    ptyWrite(goodEvent, { id: 'pane-resume', data: 'x' });
-    const resumed = readMem().records.find((r) => r.sessionId === '5e55a0b1-0000-4000-8000-000000000009');
+    const resumedRecord = readMem().records.find((r) => r.sessionId === '5e55a0b1-0000-4000-8000-000000000009');
+    ptyWrite(goodEvent, { id: resumedRecord.paneId, data: 'x' });
+    const resumed = readMem().records.find((r) => r.sessionId === resumedRecord.sessionId);
     assert(resumed && typeof resumed.lastActiveAt === 'string', 'input to a resumed pane records its activity too');
     const mem = readMem();
     Object.assign(mem.records.find((r) => r.sessionId === sid), { startedAt: '2026-09-30T00:00:00.000Z', lastActiveAt: '2026-10-01T00:00:00.000Z' });
@@ -442,25 +534,25 @@ Module._load = function (request) {
 
   section('REFUSALS — every one must spawn ZERO PTYs in main');
   const refusals = [
-    ['untrusted sender', { sender: { other: 1 }, senderFrame: wc.mainFrame }, { id: 'a', role: 'web-scout', cwd: SANDBOX }],
-    ['subframe sender', { sender: wc, senderFrame: { url: ENTRY_URL } }, { id: 'a', role: 'web-scout', cwd: SANDBOX }],
+    ['untrusted sender', { sender: { other: 1 }, senderFrame: wc.mainFrame }, { role: 'web-scout', cwd: SANDBOX }],
+    ['subframe sender', { sender: wc, senderFrame: { url: ENTRY_URL } }, { role: 'web-scout', cwd: SANDBOX }],
     ['malformed opts (null)', goodEvent, null],
     ['malformed opts (string)', goodEvent, 'pwn'],
     ['malformed opts (array)', goodEvent, []],
-    ['unknown role', goodEvent, { id: 'a', role: 'Web-Scout', cwd: SANDBOX }],
-    ['hostile videoScout truthiness', goodEvent, { id: 'a', role: 'web-scout', videoScout: 1, cwd: SANDBOX }],
-    ['videoScout flag without identity', goodEvent, { id: 'a', role: null, videoScout: true }],
-    ['video-scout identity without flag', goodEvent, { id: 'a', role: 'video-scout' }],
-    ['fenced cwd unset', goodEvent, { id: 'a', role: 'web-scout' }],
-    ['fenced cwd nonexistent', goodEvent, { id: 'a', role: 'web-scout', cwd: path.join(FIX, 'nope') }],
-    ['fenced cwd outside sandbox', goodEvent, { id: 'a', role: 'web-scout', cwd: FIX }],
-    ['fenced cwd prefix sibling', goodEvent, { id: 'a', role: 'web-scout', cwd: OUTPUTS + '-evil' }],
-    ['unknown cli', goodEvent, { id: 'a', role: null, cli: 'powershell' }],
+    ['unknown role', goodEvent, { role: 'Web-Scout', cwd: SANDBOX }],
+    ['hostile videoScout truthiness', goodEvent, { role: 'web-scout', videoScout: 1, cwd: SANDBOX }],
+    ['videoScout flag without identity', goodEvent, { role: null, videoScout: true }],
+    ['video-scout identity without flag', goodEvent, { role: 'video-scout' }],
+    ['fenced cwd unset', goodEvent, { role: 'web-scout' }],
+    ['fenced cwd nonexistent', goodEvent, { role: 'web-scout', cwd: path.join(FIX, 'nope') }],
+    ['fenced cwd outside sandbox', goodEvent, { role: 'web-scout', cwd: FIX }],
+    ['fenced cwd prefix sibling', goodEvent, { role: 'web-scout', cwd: OUTPUTS + '-evil' }],
+    ['unknown cli', goodEvent, { role: null, cli: 'powershell' }],
   ];
   for (const [label, event, opts] of refusals) {
     const before = record.ptySpawns;
     let res = null, threw = false;
-    try { res = await ptyStart(event, opts); } catch (e) { threw = true; }
+    try { res = await startPane(event, opts); } catch (e) { threw = true; }
     assert(!threw, label + ': refuses without throwing');
     assert(res && res.ok === false, label + ': returns a refusal');
     assert(record.ptySpawns === before, label + ': ZERO PTYs spawned in main');
@@ -471,7 +563,7 @@ Module._load = function (request) {
     // The prefix-sibling case must exist for its assertion to mean anything.
     fs.mkdirSync(OUTPUTS + '-evil', { recursive: true });
     const before = record.ptySpawns;
-    const res = await ptyStart(goodEvent, { id: 'a', role: 'web-scout', cwd: OUTPUTS + '-evil' });
+    const res = await startPane(goodEvent, { role: 'web-scout', cwd: OUTPUTS + '-evil' });
     assert(res && res.ok === false && record.ptySpawns === before,
       'an EXISTING outputs-evil sibling still refuses (startsWith(root + sep), not startsWith(root))');
   }
@@ -484,7 +576,7 @@ Module._load = function (request) {
       fs.writeFileSync(file, clean.replace('tools: WebSearch, WebFetch, Read, Write',
         'tools: WebSearch, WebFetch, Read, Write, ' + bad), 'utf8');
       const before = record.ptySpawns;
-      const res = await ptyStart(goodEvent, { id: 'drift', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+      const res = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX });
       assert(res && res.ok === false && res.error === 'fence-policy-forbidden-tool-declared',
         'REFUSES a fenced role that gained ' + bad);
       assert(record.ptySpawns === before, 'and spawns nothing');
@@ -492,14 +584,14 @@ Module._load = function (request) {
     // Hook removed entirely: a safe-looking tools list must not be enough.
     fs.writeFileSync(file, clean.replace(/hooks:[\s\S]*?---/, '---'), 'utf8');
     const before = record.ptySpawns;
-    const res = await ptyStart(goodEvent, { id: 'nohook', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+    const res = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX });
     assert(res && res.ok === false && record.ptySpawns === before,
       'REFUSES a fenced role whose PreToolUse fence hook is gone, even with a clean tools list');
     // Deployed hook content drifts from the tracked hook.
     fs.writeFileSync(file, clean, 'utf8');
     fs.appendFileSync(DEPLOYED_HOOK, '\n// tampered\n');
     const b2 = record.ptySpawns;
-    const r2 = await ptyStart(goodEvent, { id: 'tampered', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+    const r2 = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX });
     assert(r2 && r2.ok === false && r2.error === 'fence-policy-hook-content-not-tracked-identity',
       'REFUSES when the deployed hook is not byte-identical to the tracked fence-write.js');
     assert(record.ptySpawns === b2, 'and spawns nothing');
@@ -516,14 +608,14 @@ Module._load = function (request) {
       fs.writeFileSync(file, clean.replace('tools: WebSearch, WebFetch, Read, Write',
         'tools: WebSearch, WebFetch, Read, Write, ' + bad), 'utf8');
       const before = record.ptySpawns;
-      const res = await ptyStart(goodEvent, { id: 'drift-m1', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+      const res = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX });
       assert(res && res.ok === false && res.error === 'fence-policy-tool-not-allowed',
         'REFUSES a fenced role that gained ' + bad);
       assert(record.ptySpawns === before, 'and spawns nothing');
     }
     fs.writeFileSync(file, clean, 'utf8');
     const before = record.ptySpawns;
-    const ok = await ptyStart(goodEvent, { id: 'drift-m1-restored', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+    const ok = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX });
     assert(record.ptySpawns === before + 1 && (!ok || ok.ok !== false), 'the restored tracked role launches again');
   }
 
@@ -534,7 +626,7 @@ Module._load = function (request) {
       const before = record.ptySpawns;
       const errBefore = record.mainErrors.length;
       let res = null, threw = false;
-      try { res = await ptyStart(goodEvent, { id: 'm2', role: 'web-scout', cli: 'claude', cwd: SANDBOX, initialPrompt: prompt }); }
+      try { res = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX, initialPrompt: prompt }); }
       catch (e) { threw = true; }
       const lines = record.mainErrors.slice(errBefore);
       assert(!threw && res && res.ok === false && res.error === 'classify-fenced-initial-prompt-refused',
@@ -553,8 +645,8 @@ Module._load = function (request) {
   {
     // Preserved: the legitimate unfenced opening prompt (the reviewer launch) still reaches the command.
     const before = record.ptySpawns;
-    const res = await ptyStart(goodEvent, {
-      id: 'pane-reviewer', role: 'reviewer', cli: 'claude', cwd: FIX,
+    const res = await startPane(goodEvent, {
+      role: 'reviewer', cli: 'claude', cwd: REPO,
       initialPrompt: 'Review the change set in ./x.diff',
     });
     assert(record.ptySpawns === before + 1 && (!res || res.ok !== false), 'a reviewer launch with an opening prompt still spawns');
@@ -568,19 +660,19 @@ Module._load = function (request) {
     const lastCmd = () => record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     for (const [level, mode] of [['minimum', 'plan'], ['medium', 'acceptEdits'], ['high', 'auto']]) {
       let before = record.ptySpawns;
-      await ptyStart(goodEvent, { id: 'pane-auth-b-' + level, role: 'builder', cli: 'claude', cwd: FIX, authority: level });
+      await startPane(goodEvent, { role: 'builder', cli: 'claude', cwd: REPO, authority: level });
       assert(record.ptySpawns === before + 1, `builder at ${level} spawns`);
       assert(lastCmd().indexOf('claude --agent builder --allowedTools ') !== -1 && lastCmd().indexOf('--permission-mode ' + mode) !== -1,
         `and launches with its explicit tool set and --permission-mode ${mode}`);
       before = record.ptySpawns;
-      await ptyStart(goodEvent, { id: 'pane-auth-c-' + level, role: null, cli: 'claude', cwd: FIX, authority: level });
+      await startPane(goodEvent, { role: null, cli: 'claude', cwd: REPO, authority: level });
       assert(record.ptySpawns === before + 1 && / claude --allowedTools '/.test(' ' + lastCmd()) && lastCmd().indexOf('--permission-mode ' + mode) !== -1,
         `a bare claude pane at ${level} launches with --permission-mode ${mode}`);
     }
     {
       const before = record.ptySpawns;
-      await ptyStart(goodEvent, {
-        id: 'pane-auth-prompt', role: 'reviewer', cli: 'claude', cwd: FIX, authority: 'minimum',
+      await startPane(goodEvent, {
+        role: 'reviewer', cli: 'claude', cwd: REPO, authority: 'minimum',
         initialPrompt: 'Review the change set in ./x.diff',
       });
       assert(record.ptySpawns === before + 1
@@ -589,35 +681,35 @@ Module._load = function (request) {
     }
     {
       const before = record.ptySpawns;
-      await ptyStart(goodEvent, { id: 'pane-auth-none', role: 'builder', cli: 'claude', cwd: FIX });
+      await startPane(goodEvent, { role: 'builder', cli: 'claude', cwd: REPO });
       assert(record.ptySpawns === before + 1 && lastCmd().indexOf('--permission-mode') === -1,
         'no level sent: the pre-S10 command, no --permission-mode');
     }
     {
       const before = record.ptySpawns;
-      await ptyStart(goodEvent, { id: 'pane-auth-fenced', role: 'web-scout', cli: 'claude', cwd: SANDBOX, authority: 'high' });
+      await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX, authority: 'high' });
       assert(record.ptySpawns === before + 1 && lastCmd().indexOf('--permission-mode') === -1
         && lastCmd().indexOf('--disallowedTools Bash Glob NotebookEdit') !== -1,
       'a fenced role at High keeps its fence and gets no permission mode');
     }
     for (const cli of ['codex', 'gemini']) {
       const before = record.ptySpawns;
-      await ptyStart(goodEvent, { id: 'pane-auth-' + cli, role: null, cli, cwd: FIX, authority: 'maximum' });
+      await startPane(goodEvent, { role: null, cli, cwd: REPO, authority: 'maximum' });
       assert(record.ptySpawns === before + 1 && lastCmd().indexOf('--permission-mode') === -1,
         `a ${cli} pane at Maximum launches as before (no Claude mode)`);
     }
     const auth = [
-      ['builder at maximum', { id: 'x1', role: 'builder', cli: 'claude', cwd: FIX, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
-      ['bare claude at maximum', { id: 'x2', role: null, cli: 'claude', cwd: FIX, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
-      ['web-scout at maximum', { id: 'x3', role: 'web-scout', cli: 'claude', cwd: SANDBOX, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
-      ['a mode name as the level', { id: 'x4', role: 'builder', cli: 'claude', cwd: FIX, authority: 'bypassPermissions' }, 'authority-unknown-level'],
-      ['an injected level', { id: 'x5', role: 'builder', cli: 'claude', cwd: FIX, authority: 'high --dangerously-skip-permissions' }, 'authority-unknown-level'],
-      ['a non-string level', { id: 'x6', role: 'builder', cli: 'claude', cwd: FIX, authority: { level: 'high' } }, 'authority-unknown-level'],
+      ['builder at maximum', { role: 'builder', cli: 'claude', cwd: REPO, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
+      ['bare claude at maximum', { role: null, cli: 'claude', cwd: REPO, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
+      ['web-scout at maximum', { role: 'web-scout', cli: 'claude', cwd: SANDBOX, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
+      ['a mode name as the level', { role: 'builder', cli: 'claude', cwd: REPO, authority: 'bypassPermissions' }, 'authority-unknown-level'],
+      ['an injected level', { role: 'builder', cli: 'claude', cwd: REPO, authority: 'high --dangerously-skip-permissions' }, 'authority-unknown-level'],
+      ['a non-string level', { role: 'builder', cli: 'claude', cwd: REPO, authority: { level: 'high' } }, 'authority-unknown-level'],
     ];
     for (const [label, opts, reason] of auth) {
       const before = record.ptySpawns;
       const sentBefore = record.mainErrors.length;
-      const res = await ptyStart(goodEvent, opts);
+      const res = await startPane(goodEvent, opts);
       assert(res && res.ok === false && res.error === reason, `${label}: refused (${reason})`);
       assert(record.ptySpawns === before, `${label}: zero PTYs spawned`);
       const lines = record.mainErrors.slice(sentBefore);
@@ -647,7 +739,7 @@ Module._load = function (request) {
       };
       const before = record.ptySpawns;
       let res = null;
-      try { res = await ptyStart(goodEvent, { id: 'pane-junction', role: 'web-scout', cli: 'claude', cwd: junction }); }
+      try { res = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: junction }); }
       finally { fs.existsSync = realExists; }
       assert(record.ptySpawns === before + 1 && (!res || res.ok !== false), 'the contained junction launch is accepted');
       const spawnCwd = record.spawnArgs[record.spawnArgs.length - 1].cwd;
@@ -659,7 +751,7 @@ Module._load = function (request) {
       assert(probes.every((p) => fold(p).indexOf(fold(junction)) !== 0),
         'and the resolver never probed under the declared junction path');
     }
-    try { fs.rmdirSync(junction); } catch (e) { /* best effort; FIX is removed at the end */ }
+    removeFixtureLink(junction);
   }
 
   section('L2 — managed-policy registry probe: absence is established, unreadable refuses');
@@ -692,7 +784,7 @@ Module._load = function (request) {
       record.regCalls = [];
       const before = record.ptySpawns;
       let res = null, threw = false;
-      try { res = await ptyStart(goodEvent, { id: 'reg-' + mode, role: 'web-scout', cli: 'claude', cwd: SANDBOX }); }
+      try { res = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX }); }
       catch (e) { threw = true; }
       assert(!threw, mode + ': no throw escapes the handler');
       if (launches) {
@@ -760,7 +852,7 @@ Module._load = function (request) {
       fs.writeFileSync(file, clean.replace(TRACKED_TOOLS, line), 'utf8');
       const before = record.ptySpawns;
       const errBefore = record.mainErrors.length;
-      const res = await ptyStart(goodEvent, { id: 'drift-n1', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+      const res = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX });
       const lines = record.mainErrors.slice(errBefore);
       assert(res && res.ok === false && res.error === 'fence-policy-tools-declared-empty',
         JSON.stringify(line) + ': REFUSED with the bounded empty-tools reason');
@@ -770,7 +862,7 @@ Module._load = function (request) {
     }
     fs.writeFileSync(file, clean, 'utf8');
     const before = record.ptySpawns;
-    const ok = await ptyStart(goodEvent, { id: 'drift-n1-restored', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+    const ok = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX });
     assert(record.ptySpawns === before + 1 && (!ok || ok.ok !== false), 'the restored tracked role launches again');
   }
 
@@ -788,14 +880,14 @@ Module._load = function (request) {
       if (!made) continue;
       const before = record.ptySpawns;
       let res = null;
-      try { res = await ptyStart(goodEvent, { id: 'n3', role: 'web-scout', cli: 'claude', cwd: SANDBOX }); }
-      finally { try { fs.rmdirSync(link); } catch (e) { /* removed with FIX at the end */ } }
+      try { res = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX }); }
+      finally { removeFixtureLink(link); }
       assert(res && res.ok === false && res.error === 'resolve-agent-tree-linked-entry',
         JSON.stringify(name) + ': REFUSED as a linked agent-tree entry');
       assert(record.ptySpawns === before, JSON.stringify(name) + ': ZERO PTYs spawned');
     }
     const before = record.ptySpawns;
-    const ok = await ptyStart(goodEvent, { id: 'n3-restored', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+    const ok = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX });
     assert(record.ptySpawns === before + 1 && (!ok || ok.ok !== false), 'with the junctions removed the clean tree launches again');
   }
 
@@ -821,7 +913,7 @@ Module._load = function (request) {
     assert(noWebFetch && noWebFetch.ok === false && noWebFetch.error === 'fence-policy-matcher-does-not-cover-declared-tools',
       'a deployed web-scout whose matcher omits only WebFetch REFUSES (the grant would bypass the origin gate)');
     const before = record.ptySpawns;
-    const spawnRes = await ptyStart(goodEvent, { id: 'no-webfetch-matcher', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+    const spawnRes = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: SANDBOX });
     assert(record.ptySpawns === before && spawnRes && spawnRes.ok === false
       && spawnRes.error === 'fence-policy-matcher-does-not-cover-declared-tools',
     'and its launch is refused at spawn with zero PTYs');
@@ -833,7 +925,7 @@ Module._load = function (request) {
     const r = await ensureOutputDir(goodEvent, { role: 'web-scout' });
     assert(r && r.ok === true && fs.existsSync(r.dir), 'a sandbox is created');
     const before = record.ptySpawns;
-    const res = await ptyStart(goodEvent, { id: 'roundtrip', role: 'web-scout', cli: 'claude', cwd: r.dir });
+    const res = await startPane(goodEvent, { role: 'web-scout', cli: 'claude', cwd: r.dir });
     assert(record.ptySpawns === before + 1 && (!res || res.ok !== false),
       'and the launcher round-trip accepts it (the happy path still holds end to end)');
   }
@@ -913,7 +1005,7 @@ Module._load = function (request) {
         assert(inWrite.status === 0 && inWrite.stderr === '', tag('a new in-sandbox write is still ALLOWED (exit 0, silent)'));
       }
     } finally {
-      if (madeLink) { try { fs.rmdirSync(link); } catch (e) { /* removed with FIX at the end */ } }
+      if (madeLink) { removeFixtureLink(link); }
     }
     const hookSrc = fs.readFileSync(TRACKED_HOOK, 'utf8');
     assert(!/\$\{(resolved|target|root)\}/.test(hookSrc), 'the tracked hook interpolates no path into any message');
