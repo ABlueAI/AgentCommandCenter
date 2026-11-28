@@ -3,7 +3,11 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-27 by the PR sweeper's third status PR of the day (covers main up to 365dd26:
+Updated 2026-11-28 by the PR sweeper's status PR of the day (covers main up to 4a879f1:
+PR #308, S56's five renderer state bugs (#234 to #237 and #239), which completes S56 with #307;
+verified: GitHub's REST API, read 2026-11-28 about 07:10 UTC, shows it merged 2026-11-28 02:46
+UTC). Before that: updated 2026-11-27 by the PR sweeper's third status PR of the day, PR #368
+(covers main up to 365dd26:
 PR #352, Codex's CI audit; PR #359, Video Scout's Logs copies only the exact usage line (#358);
 verified: GitHub's REST API, read 2026-11-27 about 17:15 UTC, shows them merged 2026-11-27 16:17
 and 16:18 UTC in that order). Before that: updated 2026-11-27 by the PR sweeper's second status PR
@@ -589,8 +593,12 @@ verification, and the brief's PR in the private repo was not opened.
   #161 to #163, gap audit A5a to A5c); #227 (hard rules, Codex's pass, pacing), #241
   (S56 not tagged Sensitive), #209 (S48's OSS record) and #244 (Claude sessions mark Codex PRs
   ready).
-- **S56 is `READY`:** its 9 bug issues (#232 to #240) exist, opened on Blue's "Yes, open them"
-  (docs/DECISIONS.md, 2026-11-24) so Codex can build it next.
+- **S56 is `DONE` (#308):** all 9 bug issues (#232 to #240), opened on Blue's "Yes, open them"
+  (docs/DECISIONS.md, 2026-11-24), are fixed and closed: PR #307 (merged 2026-11-27) fixes #232,
+  #233, #238 and #240, and PR #308 (merged 2026-11-28) fixes #234 to #237 and #239, each with a
+  test named for its issue (`app/renderer/renderer-state.test.js` for #308), CI green on both
+  heads (verified: GitHub's REST API for both PRs' check runs and the 9 issues, read 2026-11-28
+  about 07:10 UTC).
 - **Merged but still `IN PROGRESS`,** because each "Done when" needs a check or a verdict: S03
   (step 25), S04 (steps 27 and 50; the runner is off), S05 (steps 23 and 24), S06 (35), S07 (38),
   S08 (39), S09 (44), S10 (40), S11 (41), S12 (29), S13 (31), S15 (48), S21 (45), S31 (re-runs of
