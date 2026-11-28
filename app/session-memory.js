@@ -15,7 +15,7 @@ const path = require('path');
 
 const FILENAME = 'session-memory.json';
 const VERSION = 1;
-const MAX_RECORDS = 200;          // oldest records drop off first
+const MAX_RECORDS = 200;          // oldest closed records drop off first
 const MAX_FILE_BYTES = 1048576;   // 1 MiB; 200 records are far smaller
 const MAX_PANE_ID_LENGTH = 64;
 const MAX_TEXT_LENGTH = 1024;     // worktree path, role, cli
@@ -43,6 +43,9 @@ const STOP_REASONS = new Set(Object.values(STOP_REASON));
 const RESUMABLE_STOPS = new Set([STOP_REASON.MAKO_CLOSED, STOP_REASON.UNKNOWN]);
 
 const REASON = Object.freeze({
+  PROFILE_BUSY: 'session-memory-profile-in-use',
+  PROFILE_LOCK_FAILED: 'session-memory-profile-lock-failed',
+  FULL: 'session-memory-open-record-limit',
   READ_FAILED: 'session-memory-read-failed',
   REPARSE_POINT: 'session-memory-reparse-point-refused',
   NOT_REGULAR_FILE: 'session-memory-not-regular-file',
@@ -59,6 +62,32 @@ const REASON = Object.freeze({
 });
 
 function refuse(reason) { return { ok: false, reason }; }
+
+// A bounded, path-free label for an unexpected error (its code, else its name), for logs and
+// notices. Error messages can carry paths, so they are never passed on.
+function errorCause(error) {
+  const raw = error && (error.code || (error.errcode !== undefined && `sqlite-${error.errcode}`) || error.name);
+  const cause = typeof raw === 'string' ? raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) : '';
+  return cause || 'unknown';
+}
+
+// The database is only a lock. Session records stay in the existing JSON file. A reserved SQLite
+// lock excludes other writers across processes and the OS releases it even after a forced quit.
+function acquireProfileLease(userDataDir) {
+  const SQLITE_BUSY = 5;
+  let db;
+  try {
+    const { DatabaseSync } = require('node:sqlite');
+    fs.mkdirSync(userDataDir, { recursive: true });
+    db = new DatabaseSync(path.join(userDataDir, 'session-memory-lock.sqlite'));
+    db.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE');
+  } catch (error) {
+    db?.close();
+    if (error.errcode === SQLITE_BUSY) return refuse(REASON.PROFILE_BUSY);
+    return { ...refuse(REASON.PROFILE_LOCK_FAILED), cause: errorCause(error) };
+  }
+  return { ok: true, release: () => db.close() };
+}
 
 function isSessionId(v) { return typeof v === 'string' && UUID_RE.test(v); }
 
@@ -194,8 +223,13 @@ function createSessionMemoryStore({ userDataDir, fsImpl = fs, now = () => new Da
     };
     return update((records) => {
       if (records.some((r) => r.sessionId === sessionId)) return refuse(REASON.DUPLICATE_SESSION_ID);
+      if (records.length === MAX_RECORDS) {
+        const oldestClosed = records.findIndex((r) => r.stoppedAt !== null);
+        if (oldestClosed < 0) return refuse(REASON.FULL);
+        records.splice(oldestClosed, 1);
+      }
       records.push(rec);
-      return { ok: true, changed: true, records: records.slice(-MAX_RECORDS) };
+      return { ok: true, changed: true, records };
     });
   }
 
@@ -303,7 +337,7 @@ function createSessionMemoryStore({ userDataDir, fsImpl = fs, now = () => new Da
   }
 
   // S46: finished sessions archive themselves (isFinished above). Archived records stay in the file
-  // (oldest still drop off at MAX_RECORDS); they leave the hygiene list and the idle list.
+  // (closed records drop off at MAX_RECORDS); they leave the hygiene list and the idle list.
   function archiveFinished() {
     return update((records) => {
       const at = now().toISOString();
@@ -321,6 +355,6 @@ function createSessionMemoryStore({ userDataDir, fsImpl = fs, now = () => new Da
 }
 
 module.exports = {
-  createSessionMemoryStore, isSessionId, FILENAME, VERSION, MAX_RECORDS, STOP_REASON, RESUMABLE_STOPS, REASON,
+  acquireProfileLease, errorCause, createSessionMemoryStore, isSessionId, FILENAME, VERSION, MAX_RECORDS, STOP_REASON, RESUMABLE_STOPS, REASON,
   OWNERS, DEFAULT_OWNER, MAX_DONE_WHEN_LENGTH, checkDoneWhen, isFinished,
 };

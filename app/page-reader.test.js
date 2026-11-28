@@ -290,14 +290,16 @@ const OUTPUTS = path.join(PROJECTS, '.command-center', 'outputs');
 for (const d of [USER_DATA, HOME, OUTPUTS]) fs.mkdirSync(d, { recursive: true });
 fs.writeFileSync(path.join(USER_DATA, 'settings.json'), JSON.stringify({ projectsRoot: PROJECTS, selectedRepo: '' }));
 const ENTRY_URL = pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString();
-const record = { handled: new Map(), on: new Map(), spawnArgs: [], webContents: null };
+const record = { handled: new Map(), on: new Map(), appHandlers: new Map(), spawnArgs: [], webContents: null };
 function electronStub() {
   const wc = { mainFrame: { url: ENTRY_URL }, on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
   record.webContents = wc;
   const w = new Proxy({ webContents: wc, isDestroyed: () => false, isMinimized: () => false }, { get(t, k) { return k in t ? t[k] : () => {}; } });
   class BrowserWindow { constructor() { return w; } static getAllWindows() { return []; } }
   return {
-    app: { whenReady: () => Promise.resolve(), getPath: (n) => (n === 'userData' ? USER_DATA : HOME), setAppUserModelId() {}, on() {}, quit() {}, requestSingleInstanceLock() { throw new Error('no'); } },
+    app: { whenReady: () => Promise.resolve(), getPath: (n) => (n === 'userData' ? USER_DATA : HOME), setAppUserModelId() {},
+      on(ev, fn) { if (!record.appHandlers.has(ev)) record.appHandlers.set(ev, []); record.appHandlers.get(ev).push(fn); },
+      quit() {}, requestSingleInstanceLock() { throw new Error('no'); } },
     BrowserWindow,
     ipcMain: { handle(ch, fn) { record.handled.set(ch, fn); }, on(ch, fn) { record.on.set(ch, fn); } },
     shell: { openExternal: async () => {}, openPath: async () => {} },
@@ -440,6 +442,12 @@ Module._load = function (request) {
   const fences = src.match(/const FENCED_ROLES = new Set\(\[([^\]]*)\]\)/);
   assert(fences && /'page-reader'/.test(fences[1]), 'page-reader is a fenced role in main.js');
 
+  // Quit as the app does: will-quit closes the session-memory profile lease, whose open lock file
+  // would otherwise make the exit cleanup of USER_DATA fail on Windows (EBUSY).
+  for (const fn of record.appHandlers.get('will-quit') || []) fn();
+  const leaseProbe = require('./session-memory').acquireProfileLease(USER_DATA);
+  assert(leaseProbe.ok, 'will-quit released the session-memory profile lease');
+  if (leaseProbe.ok) leaseProbe.release();
   if (prevProfile === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = prevProfile;
   if (prevBrowsers === undefined) delete process.env.PLAYWRIGHT_BROWSERS_PATH; else process.env.PLAYWRIGHT_BROWSERS_PATH = prevBrowsers;
   process.stdout.write('\npage-reader: ' + passed + ' passed, ' + failed + ' failed\n');

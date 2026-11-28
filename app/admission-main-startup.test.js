@@ -25,6 +25,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const Module = require('module');
+const { randomUUID } = require('crypto');
+const { createSessionMemoryStore, STOP_REASON } = require('./session-memory');
 const childProcess = require('child_process');
 
 let passed = 0, failed = 0;
@@ -142,7 +144,8 @@ async function bootMain(admissionEnv, options) {
   Module._load = function (request, parent) {
     if (request === 'electron') return electronStub;
     if (request === '@lydell/node-pty') return ptyStub;
-    if (opt.childProcess && request === 'child_process' && parent.filename === MAIN_PATH) return opt.childProcess;
+    if (request === 'fs' && parent?.filename === MAIN_PATH && opt.mainFs) return opt.mainFs;
+    if (opt.childProcess && request === 'child_process' && parent?.filename === MAIN_PATH) return opt.childProcess;
     return realLoad.apply(this, arguments);
   };
 
@@ -554,6 +557,107 @@ const LEDGER = 'admission-ledger.json';
     }
   }
 
+  section('Settings read failures refuse visibly and preserve saved preferences');
+  {
+    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-settings-'));
+    try {
+      const file = path.join(userDataDir, 'settings.json');
+      let unreadable = false;
+      let raceFirstSave = false;
+      const mainFs = {
+        ...fs,
+        readFileSync(filePath, ...args) {
+          if (filePath === file && unreadable) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+          return fs.readFileSync(filePath, ...args);
+        },
+        writeFileSync(filePath, ...args) {
+          if (filePath === file && raceFirstSave) fs.writeFileSync(file, '{just appeared', { flag: 'wx' });
+          return fs.writeFileSync(filePath, ...args);
+        },
+      };
+      const { record } = await bootMain({}, { userDataDir, mainFs });
+      const get = record.handled.get('get-settings');
+      const save = record.handled.get('save-settings');
+      const trusted = { sender: record.webContents, senderFrame: record.webContents.mainFrame };
+      const invokeRefuses = async (invoke) => {
+        try { await invoke(); return false; }
+        catch (e) { return /settings\.json/i.test(e.message); }
+      };
+      const defaults = await get(trusted);
+      assert(typeof defaults.projectsRoot === 'string' && defaults.selectedRepo === '' && !fs.existsSync(file),
+        'missing settings return first-run defaults without writing');
+      raceFirstSave = true;
+      assert(await invokeRefuses(() => save(trusted, { theme: 'obsidian' }))
+        && fs.readFileSync(file, 'utf8') === '{just appeared', 'first save preserves a file that appears during the save');
+      raceFirstSave = false;
+      fs.unlinkSync(file);
+      const prefs = { projectsRoot: path.join(userDataDir, 'projects'), selectedRepo: 'saved-repo', theme: 'void' };
+      await save(trusted, prefs);
+      const saved = fs.readFileSync(file, 'utf8');
+      for (const [label, bytes, denyRead] of [
+        ['unreadable', saved, true], ['malformed JSON', '{broken', false],
+        ['wrong shape', 'null', false], ['invalid project root', '{"projectsRoot":42}', false],
+      ]) {
+        fs.writeFileSync(file, bytes);
+        unreadable = denyRead;
+        const noticeCount = record.sent.length;
+        assert(await invokeRefuses(() => get(trusted)), `${label}: get-settings rejects with a settings error`);
+        assert(await invokeRefuses(() => save(trusted, { theme: 'obsidian' })), `${label}: save-settings rejects with a settings error`);
+        assert(record.sent.slice(noticeCount).some((line) => line.includes('settings.json')), `${label}: the window receives a visible notice`);
+        assert(fs.readFileSync(file, 'utf8') === bytes, `${label}: original bytes are preserved`);
+      }
+      unreadable = false;
+      fs.writeFileSync(file, saved);
+      for (const [label, patch] of [
+        ['empty project root', { projectsRoot: '' }], ['numeric project root', { projectsRoot: 42 }],
+        ['non-string selected repo', { selectedRepo: null }],
+      ]) {
+        let refusal;
+        try { await save(trusted, patch); } catch (e) { refusal = e; }
+        assert(refusal && /invalid-setting-value/.test(refusal.message) && fs.readFileSync(file, 'utf8') === saved,
+          `${label}: save-settings refuses a value the reader would reject and leaves the file untouched`);
+      }
+      const recovered = await save(trusted, { theme: 'nord' });
+      assert(recovered.projectsRoot === prefs.projectsRoot && recovered.selectedRepo === prefs.selectedRepo
+        && recovered.theme === 'nord', 'saving works after recovery and preserves the other preferences');
+      for (const fn of record.appHandlers.get('will-quit') || []) fn();
+    } finally {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
+  }
+
+  section('Session recovery belongs to one process per profile');
+  {
+    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-session-profile-'));
+    try {
+      const store = createSessionMemoryStore({ userDataDir });
+      const first = (await bootMain({}, { userDataDir })).record;
+      const sessionId = randomUUID();
+      assert(store.recordStart({ sessionId, paneId: 'p1', cli: 'claude', worktree: userDataDir }).ok,
+        'the first process has an open session record');
+      const second = (await bootMain({}, { userDataDir })).record;
+      assert(second.windowsCreated === 1, 'the other window can still open');
+      assert(store.list().records[0].stoppedAt === null, 'the other window cannot mark the running record interrupted');
+      const sender = { senderFrame: second.webContents.mainFrame, sender: second.webContents };
+      const offer = await second.handled.get('session-resume-offer')(sender);
+      assert(offer.ok === false && second.sent.some((line) => line.includes('session-memory-profile-in-use')),
+        'the other window visibly refuses session recovery for the busy profile');
+      const change = await second.handled.get('session-hygiene-done-when')(sender, sessionId, 'Done');
+      assert(!change.ok && store.list().records[0].doneWhen === undefined,
+        'the other window cannot edit the live profile’s session records');
+      for (const fn of second.appHandlers.get('before-quit') || []) fn({ preventDefault() {} });
+      for (const fn of second.appHandlers.get('will-quit') || []) fn();
+      assert(store.list().records[0].stoppedAt === null, 'quitting the other window leaves the record open');
+      // Release ownership without the graceful record close, as after an interrupted run.
+      for (const fn of first.appHandlers.get('will-quit') || []) fn();
+      const next = (await bootMain({}, { userDataDir })).record;
+      assert(store.list().records[0].stopReason === STOP_REASON.UNKNOWN, 'the next owner recovers the interrupted record');
+      for (const fn of next.appHandlers.get('will-quit') || []) fn();
+    } finally {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
+  }
+
   section('(9) trusted sender at every registered IPC channel, settings, and review diff');
   {
     const gitCalls = [];
@@ -661,6 +765,9 @@ const LEDGER = 'admission-ledger.json';
       const missing = await reviewDiff(trusted, { worktree, base: 'missing-ref' });
       assert(missing?.ok === false && missing.error === 'git-diff-failed', 'Git failure is visible instead of an empty success');
       assert(fs.readFileSync(diffFile, 'utf8') === before, 'Git failure leaves the existing review file untouched');
+      // Quit as the app does, so the session-memory profile lease releases its lock file before
+      // the fixture is removed (an open lock file fails the removal on Windows with EBUSY).
+      for (const fn of r.record.appHandlers.get('will-quit') || []) fn();
     } finally {
       fs.rmSync(fixture, { recursive: true, force: true });
     }
